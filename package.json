@@ -1,0 +1,11 @@
+{
+  "name": "intear-dex-aggregator-tool-box",
+  "module": "src/index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^7"
+  }
+}
