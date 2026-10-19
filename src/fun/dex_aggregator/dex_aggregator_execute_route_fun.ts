@@ -118,6 +118,15 @@ async function sendOneTx(
     // opaque `{ "0": 123, "1": 34, ... }` object that the contract
     // cannot parse.
     const args = decodeInstructionArgsAsJson(fc.args, context);
+    // Log what we are about to sign so the user can compare against
+    // the args shown in their wallet popup — useful when debugging
+    // wallet-side re-serialization issues.
+    if (verbose) {
+      console.log(
+        `[dex-aggregator] → ${tx.receiver_id}.${fc.method_name}`,
+        "args:", args,
+      );
+    }
     const gas = gasFromRoute(fc.gas);
     const deposit = depositFromRoute(fc.deposit);
     // near-kit's `GasInput` is a template literal type that only
