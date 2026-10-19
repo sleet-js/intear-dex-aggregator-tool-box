@@ -43,8 +43,7 @@ export class DEX_AGGREGATOR_CLIENT_ERROR extends Error {
 export const DEX_AGGREGATOR_BASE_URL = "https://router.intear.tech";
 /** Default per-request wait budget (ms). */
 export const DEX_AGGREGATOR_DEFAULT_MAX_WAIT_MS = 2000;
-/** Known DEX ids the router may quote (allow-list values for `dexes`).
- *  Mirrors the constants on the rs tool-box for cross-language parity. */
+/** Known DEX ids the router may quote (allow-list values for `dexes`). */
 export const DEX_AGGREGATOR_KNOWN_DEXES =
   "Rhea,Aidols,Wrap,RheaDcl,MetaPool,Linear,XRhea,RNear,Plach";
 // =================================================

@@ -1,8 +1,8 @@
 // =================================================
 // get_routes
-// Re-exports of `DEX_AGGREGATOR_CLIENT.GET_ROUTES` / `GET_BEST_ROUTE`
-// at the path the rs tool-box uses (`fun::dex_aggregator::...`), so
-// TS callers don't have to import from `lib` directly.
+// Free-function re-exports of `DEX_AGGREGATOR_CLIENT.GET_ROUTES` /
+// `GET_BEST_ROUTE`, so callers can keep a flat `import { GET_ROUTES }`
+// style without reaching into the `lib/` internals.
 //
 // Functions are intentionally thin pass-throughs — every typed field,
 // error, and helper lives on the client class so the fun paths and

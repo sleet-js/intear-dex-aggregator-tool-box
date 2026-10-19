@@ -9,9 +9,9 @@
 // The router serves `Vec<Quote>`; `Quote` extends `Route` with cost
 // estimates (gas + storage deposits). `Route` itself has no
 // `has_slippage` field in today's wire format — older responses did
-// (the rust tool-box was written against them). We accept either
-// shape by defaulting to `true` (AMM-style), which mirrors what
-// callers used to do.
+// and some clients still expect it. We accept either shape by
+// defaulting to `true` (AMM-style), which mirrors what callers
+// used to do.
 // =================================================
 // Decode any JSON value into a `bigint` (number-or-string on the wire).
 // Used for `gas` (raw gas units) and other u64 / yoctoNEAR fields.
@@ -71,7 +71,7 @@ export interface NEAR_TRANSACTION_INSTRUCTION {
   /** True for referral-fee legs — the router calls these `is_fee_transaction`.
    *  After a route's swap transactions land, call `POST /route/outcome`
    *  with their hashes + `fee_amount` to find out whether the fee
-   *  transactions should be sent. The rust tool-box named this flag
+   *  transactions should be sent. Older responses used the alias
    *  `continue_if_failed`; we accept either name on deserialize. */
   continue_if_failed?: boolean;
   is_fee_transaction?: boolean;
@@ -133,9 +133,9 @@ export interface ROUTE {
 }
 // =================================================
 /** True when an instruction is a referral-fee leg (router name) or
- *  carries the older "continue on failure" flag. The rs tool-box
- *  used `continue_if_failed`, the router emits `is_fee_transaction`;
- *  both indicate the same thing. */
+ *  carries the older "continue on failure" flag. The router emits
+ *  `is_fee_transaction`; older responses used `continue_if_failed`.
+ *  Both indicate the same thing. */
 export function SHOULD_CONTINUE_ON_FAILURE(
   tx: NEAR_TRANSACTION_INSTRUCTION,
 ): boolean {
@@ -296,7 +296,7 @@ export function COERCE_ROUTE(raw: Record<string, unknown>): ROUTE {
   };
 }
 // =================================================
-// pure helpers (mirror Rust tool-box methods on the type)
+// pure helpers on the route type
 export function TX_COUNT(route: ROUTE): number {
   return route.execution_instructions.length;
 }

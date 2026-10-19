@@ -2,7 +2,7 @@
 
 🟦 Typed **TypeScript** tool box for the [intear dex-aggregator](https://docs.intear.tech/docs/dex-aggregator/) (`GET https://router.intear.tech/route`), designed to be used **with [near-kit](https://github.com/r-near/near-kit) and [near-kit-tool-box-ts](https://github.com/sleet-js/near-kit-tool-box)**: quote routes through this crate's client, sign + send them with your near-kit `Near` client.
 
-ℹ️ quoting is read-only (no credentials). Executing needs a funded **mainnet** signer — the router is mainnet only. A TypeScript port of the [Rust tool box](https://github.com/sleet-rs/intear-dex-aggregator-tool-box): same shape, same URL, same wire format — `Near` types from `near-kit` (0.20+) plug straight in.
+ℹ️ quoting is read-only (no credentials). Executing needs a funded **mainnet** signer — the router is mainnet only. `Near` types from `near-kit` (0.20+) plug straight in.
 
 ---
 
@@ -180,43 +180,6 @@ Verified live responses (run `bun run swap near 100000000000000000000000 usdt.te
 
 ---
 
-## LAYOUT (mirrors the rust tool-box)
-
-```
-./
-├── src/                                          # library
-│   ├── index.ts                                  # re-exports
-│   ├── lib/
-│   │   ├── client.ts                             # DEX_AGGREGATOR_CLIENT (GET_ROUTES / GET_BEST_ROUTE) + typed error class
-│   │   ├── decode.ts                             # base64 / gas / deposit converters
-│   │   ├── format.ts                             # route table + preview printers
-│   │   ├── error_type.ts                         # DEX_AGGREGATOR_ERROR union + format helper
-│   │   ├── quote_params_type.ts                  # QUOTE_PARAMS + SLIPPAGE + WITH_* builders
-│   │   └── route_response_type.ts                # ROUTE + instructions + COERCE_ROUTE()
-│   └── fun/
-│       ├── get_routes.ts                         # GET_ROUTES / GET_BEST_ROUTE (1:1 parity with rs path)
-│       └── execute_route.ts                      # EXECUTE_ROUTE_SEQUENTIAL / EXECUTE_ROUTE_BATCHED (near-kit + wallet send)
-├── bin/                                          # top-level CLI bin (not part of lib)
-│   └── dex_aggregator_swap_bin.ts                # interactive quote → pick → preview → execute
-└── html/                                         # rsbuild browser demo with @near-kit-tool-box/web
-    ├── package.json
-    ├── rsbuild.config.ts
-    ├── tsconfig.json
-    ├── public/index.html
-    └── src/{index.ts, ts/{auth, swap_form}.ts}
-```
-
-Notes vs the rs tool-box:
-
-- **`is_fee_transaction` first**, falls back to **`continue_if_failed`** — the rs tool-box only knows `continue_if_failed`, which the router never actually emits (it emits `is_fee_transaction: true` instead). The TS decoder accepts both.
-- Surfaces the router's `Quote` cost fields (`estimated_max_gas_cost`, `estimated_gas_usage`, `storage_deposits`, `max_storage_deposits`, `fee_amount`) so frontends can show "this will cost ~0.001 NEAR in gas + storage". The rs tool-box silently drops them today.
-- Token id format mirrors the router's full surface: `near` for native, plus `nep141:`, `rhea-nep141:`, and `intear-dex:` prefixes — all passed through verbatim.
-- The on-wire schema is checked against current upstream `dex-aggregator/src/types.rs` on every change.
-
-`near-kit` peer dep is `^0.20.2`; the consumer is responsible for choosing browser (`@hot-labs/near-connect`) or backend (privateKey) signer.
-
----
-
 ## COMMANDS
 
 ```bash
@@ -236,7 +199,6 @@ cd html && bun run typecheck                           # html demo typecheck
 - aggregator source: <https://github.com/INTEARnear/dex-aggregator>
 - near-kit (TypeScript): <https://github.com/r-near/near-kit>
 - near-kit tool box TS: <https://github.com/sleet-js/near-kit-tool-box>
-- rust twin: <https://github.com/sleet-rs/intear-dex-aggregator-tool-box>
 
 ==================
 <br/>
