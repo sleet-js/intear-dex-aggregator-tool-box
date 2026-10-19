@@ -50,17 +50,15 @@
       }
       .row { margin: 4px 0; }
       .row label { display: inline-block; width: 120px; text-align: right; padding-right: 8px; }
-      .small { font-size: 13px; opacity: 0.8; }
+      .small { font-size: 13px; opacity: 0.85; }
       .error { color: #ffd0d0; }
       .ok { color: #d0ffd0; }
       details summary { cursor: pointer; }
+      a { color: #fff; text-decoration: underline; }
     </style>
   </head>
   <body>
     <div id="root"></div>
-    <!-- ======================== -->
-    <!-- Swap form -->
-    <!-- ======================== -->
     <section>
       <h1>intear dex-aggregator demo</h1>
       <p class="small">
@@ -70,40 +68,20 @@
 
       <div class="row">
         <label>token in:</label>
-        <input
-          id="TOKEN_IN"
-          type="text"
-          value="shit-1170.meme-cooking.near"
-          spellcheck="false"
-        />
+        <input id="TOKEN_IN" type="text" value="shit-1170.meme-cooking.near" spellcheck="false" />
       </div>
       <div class="row">
         <label>amount in:</label>
-        <input
-          id="AMOUNT_IN"
-          type="text"
-          value="100000000000000000000000"
-          spellcheck="false"
-        />
+        <input id="AMOUNT_IN" type="text" value="100000000000000000000000" spellcheck="false" />
         <div class="small">(raw units, no decimals — e.g. 100000000000000000000000 = 0.1 NEAR)</div>
       </div>
       <div class="row">
         <label>token out:</label>
-        <input
-          id="TOKEN_OUT"
-          type="text"
-          value="wrap.near"
-          spellcheck="false"
-        />
+        <input id="TOKEN_OUT" type="text" value="wrap.near" spellcheck="false" />
       </div>
       <div class="row">
         <label>referrer:</label>
-        <input
-          id="REFERRER_ID"
-          type="text"
-          value="ref.huggies.near"
-          spellcheck="false"
-        />
+        <input id="REFERRER_ID" type="text" value="ref.huggies.near" spellcheck="false" />
         <div class="small">(optional — credited (and possibly paid) on supported DEXes)</div>
       </div>
 
@@ -119,7 +97,7 @@
 
       <div id="ROUTES_OUTPUT"></div>
     </section>
-    <!-- ======================== -->
-    <!-- ======================== -->
+
+    <script type="module" src="../src/main.ts"></script>
   </body>
 </html>
