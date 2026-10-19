@@ -136,18 +136,14 @@ The bin prints a route table (`# | dex | estimated | worst-case | plan | exec | 
 
 ### 5. Run the HTML UI demo
 
-A browser-only demo lives in [`html/`](./html). It uses `@near-kit-tool-box/web` for the wallet and this crate for the dex-aggregator. No bundler — Bun compiles the entrypoint directly into a single self-contained `dist/index.html`.
+A browser-only demo lives in [`html/`](./html). It uses `@near-kit-tool-box/web` for the wallet and this crate for the dex-aggregator. Bun's dev server serves the entrypoint directly — no bundler or build step.
 
 ```bash
 cd html
 bun install
-
-bun build --compile --target=browser ./index.html --outdir ./dist
-
-cd dist && python3 -m http.server 5180 --bind 0.0.0.0
-# → http://localhost:5180/ — connect wallet, paste any token
-# contract pair (defaults: shit-1170.meme-cooking.near → wrap.near,
-# referrer ref.huggies.near), click GET ROUTES, click EXECUTE per route
+bun run html/index.html   # → http://localhost:3000/ — connect wallet, paste any token
+                          # contract pair (defaults: shit-1170.meme-cooking.near → wrap.near,
+                          # referrer ref.huggies.near), click GET ROUTES, click EXECUTE per route
 ```
 
 See [`html/README.md`](./html/README.md) for details and the full list of UX knobs.

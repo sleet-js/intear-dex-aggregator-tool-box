@@ -16,16 +16,12 @@ You can paste any token contract into the inputs. Mainnet only — the tool box 
 ### Run
 
 ```sh
-bun install                                  # one-time deps
+bun install                       # one-time deps
 
-bun build --compile --target=browser \
-  ./index.html --outdir ./dist               # build a single self-contained HTML
-
-cd dist && python3 -m http.server 5180 --bind 0.0.0.0
-# → http://localhost:5180/  (and  http://<lan-ip>:5180/)
+bun run html/index.html           # → http://localhost:3000/
 ```
 
-Two commands, no scripts, no extra files. The build emits one `dist/index.html` with all JS/CSS inlined — drop it on any static host.
+One command. Bun's dev server serves the entrypoint directly and transpiles the `.ts` imports on the fly — no bundler, no build step, no extra files.
 
 ### What you get
 
