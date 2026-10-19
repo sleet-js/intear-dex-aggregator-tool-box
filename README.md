@@ -141,9 +141,7 @@ A browser-only demo lives in [`html/`](./html). It uses `@near-kit-tool-box/web`
 ```bash
 cd html
 bun install
-bun run html/index.html   # → http://localhost:3000/ — connect wallet, paste any token
-                          # contract pair (defaults: shit-1170.meme-cooking.near → wrap.near,
-                          # referrer ref.huggies.near), click GET ROUTES, click EXECUTE per route
+bun run html/index.html   
 ```
 
 See [`html/README.md`](./html/README.md) for details and the full list of UX knobs.
