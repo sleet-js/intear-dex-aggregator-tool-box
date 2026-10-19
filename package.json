@@ -1,11 +1,40 @@
 {
   "name": "intear-dex-aggregator-tool-box",
+  "version": "0.1.0",
+  "description": "Typed client + near-kit execution helpers for the intear dex-aggregator (https://router.intear.tech).",
+  "license": "MIT",
+  "homepage": "https://sleet-js.near.page",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sleet-js/intear-dex-aggregator-tool-box.git"
+  },
   "module": "src/index.ts",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "swap": "bun run bin/dex_aggregator_swap_bin.ts"
+  },
+  "dependencies": {
+    "near-kit": "^0.20.2"
+  },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "typescript": "^5.6.0"
   },
   "peerDependencies": {
-    "typescript": "^7"
-  }
+    "typescript": "^5"
+  },
+  "files": [
+    "README.md",
+    "LICENSE",
+    "src/**/*",
+    "!src/**/*.test.ts"
+  ],
+  "//": "compatible with near-kit and near-kit-tool-box-ts; quoted deps are unpinned for max flexibility — bump together with near-kit."
 }

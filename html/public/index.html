@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>intear dex-aggregator demo</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg%20id%3D%22ROUND_ICON%22%20viewBox%3D%220%200%201080%201080%22%20preserveAspectRatio%3D%22xMidYMid%20meet%22%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%3E%3Ccircle%20cx%3D%22540%22%20cy%3D%22540%22%20r%3D%22300%22%20fill%3D%22%237d84b2%22%20/%3E%3C/svg%3E"
+    />
+    <meta name="theme-color" content="#000000" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/@sleet-css/sleet-css/css-out/main.css"
+    />
+    <style>
+      button {
+        font-family: "Offside", sans-serif;
+        width: 500px;
+        max-width: 90vw;
+      }
+      input,
+      textarea {
+        font-family: "Ubuntu", sans-serif;
+        font-size: 18px;
+        width: 500px;
+        max-width: 90vw;
+        box-sizing: border-box;
+      }
+      .route-card {
+        text-align: left;
+        background: rgba(255, 255, 255, 0.08);
+        padding: 12px;
+        margin: 8px auto;
+        max-width: 760px;
+        border-radius: 6px;
+        font-family: "Ubuntu Mono", "Ubuntu", monospace;
+        font-size: 13px;
+        overflow-x: auto;
+      }
+      .route-card h3 {
+        margin: 0 0 6px 0;
+        font-size: 18px;
+      }
+      .route-card pre {
+        white-space: pre-wrap;
+        word-break: break-all;
+        margin: 4px 0;
+      }
+      .row { margin: 4px 0; }
+      .row label { display: inline-block; width: 120px; text-align: right; padding-right: 8px; }
+      .small { font-size: 13px; opacity: 0.8; }
+      .error { color: #ffd0d0; }
+      .ok { color: #d0ffd0; }
+      details summary { cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- ======================== -->
+    <!-- Swap form -->
+    <!-- ======================== -->
+    <section>
+      <h1>intear dex-aggregator demo</h1>
+      <p class="small">
+        Quote + execute via <code>https://router.intear.tech</code>.
+        Defaults use a meme token (in) and wrap.near (out).
+      </p>
+
+      <div class="row">
+        <label>token in:</label>
+        <input
+          id="TOKEN_IN"
+          type="text"
+          value="shit-1170.meme-cooking.near"
+          spellcheck="false"
+        />
+      </div>
+      <div class="row">
+        <label>amount in:</label>
+        <input
+          id="AMOUNT_IN"
+          type="text"
+          value="100000000000000000000000"
+          spellcheck="false"
+        />
+        <div class="small">(raw units, no decimals — e.g. 100000000000000000000000 = 0.1 NEAR)</div>
+      </div>
+      <div class="row">
+        <label>token out:</label>
+        <input
+          id="TOKEN_OUT"
+          type="text"
+          value="wrap.near"
+          spellcheck="false"
+        />
+      </div>
+      <div class="row">
+        <label>referrer:</label>
+        <input
+          id="REFERRER_ID"
+          type="text"
+          value="ref.huggies.near"
+          spellcheck="false"
+        />
+        <div class="small">(optional — credited (and possibly paid) on supported DEXes)</div>
+      </div>
+
+      <div class="row">
+        <button id="NEAR_AUTH_BUTTON">LOGIN</button>
+      </div>
+      <div class="row">
+        <button id="GET_ROUTES_BUTTON">GET ROUTES</button>
+      </div>
+
+      <div id="ROUTES_OUTPUT"></div>
+    </section>
+    <!-- ======================== -->
+    <!-- ======================== -->
+  </body>
+</html>
