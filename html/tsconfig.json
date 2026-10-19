@@ -5,6 +5,7 @@
     "noEmit": true,
     "skipLibCheck": true,
     "useDefineForClassFields": true,
+    "types": ["bun"],
 
     "module": "ESNext",
     "moduleDetection": "force",
@@ -18,5 +19,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["src"]
+  "include": ["src", "server.ts"]
 }

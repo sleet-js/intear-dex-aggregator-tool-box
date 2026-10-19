@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run index.html"
+    "dev": "bun run server.ts"
   },
   "dependencies": {
     "@near-kit-tool-box/web": "^0.1.7",
