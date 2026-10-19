@@ -40,6 +40,5 @@
   },
   "files": [
     "dist"
-  ],
-  "//": "compatible with near-kit and near-kit-tool-box-ts; quoted deps are unpinned for max flexibility — bump together with near-kit."
+  ]
 }
