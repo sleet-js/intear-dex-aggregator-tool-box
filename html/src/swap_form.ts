@@ -162,8 +162,11 @@ function renderError(err: unknown): void {
 }
 // =================================================
 async function executeOne(route: Route, index: number): Promise<void> {
-  const acct = await getConnectedAccountId();
-  if (!acct) {
+  // Read the connected account from the mirror kept in auth.ts
+  // (window.__accountId). Click handlers aren't async-survivable for
+  // "reconnect and try again", so we trust the auth.ts state here.
+  const signerId = window.__accountId;
+  if (!signerId) {
     alert("Please LOGIN first.");
     return;
   }
@@ -173,7 +176,7 @@ async function executeOne(route: Route, index: number): Promise<void> {
     btn.textContent = "SENDING...";
   }
   try {
-    const outcomes = await executeRoute(near_kit_client(), route);
+    const outcomes = await executeRoute(near_kit_client(), route, { signerId });
     const ok = outcomes.every((o) =>
       o.status && typeof o.status === "object" &&
       "SuccessValue" in o.status,

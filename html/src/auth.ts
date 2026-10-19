@@ -9,9 +9,25 @@ import { near_connect_client } from "@near-kit-tool-box/web";
 // That is the entire pattern. The tool box already wires the
 // underlying NearConnector from @hot-labs/near-connect; we just
 // use it.
+//
+// The connected accountId is mirrored to `window.__accountId` so
+// swap_form.ts can read it without importing this module (the
+// bundler would let us import, but mirroring keeps the tool-box
+// pattern simple — every consumer reads wallet().getAccounts() or
+// reads the mirror).
 // ==========================================
+declare global {
+  interface Window {
+    __accountId?: string;
+  }
+}
+
 let isSignedIn: boolean = false;
-let accountId: string | null = null;
+
+function setAccountId(value: string | null): void {
+  if (value) window.__accountId = value;
+  else delete window.__accountId;
+}
 
 async function updateAuthStatus(): Promise<void> {
   try {
@@ -19,14 +35,16 @@ async function updateAuthStatus(): Promise<void> {
     const accounts = await wallet.getAccounts();
     if (accounts && accounts.length > 0) {
       console.log("Connected account:", accounts[0].accountId);
-      accountId = accounts[0].accountId;
+      setAccountId(accounts[0].accountId);
       isSignedIn = true;
     } else {
       console.log("Not connected");
+      setAccountId(null);
       isSignedIn = false;
     }
   } catch (error) {
     console.log("No active wallet session:", error);
+    setAccountId(null);
     isSignedIn = false;
   }
   renderAuthButton();
@@ -36,7 +54,7 @@ function renderAuthButton(): void {
   const btn = document.getElementById("NEAR_AUTH_BUTTON");
   if (!btn) return;
   btn.textContent = isSignedIn
-    ? `LOGOUT ${accountId ?? ""}`.trim()
+    ? `LOGOUT ${window.__accountId ?? ""}`.trim()
     : "LOGIN";
 }
 
@@ -54,7 +72,9 @@ async function handleLogout(): Promise<void> {
   try {
     const wallet = await near_connect_client().wallet();
     wallet.signOut();
-    await updateAuthStatus();
+    setAccountId(null);
+    isSignedIn = false;
+    renderAuthButton();
   } catch (error) {
     console.error("Logout failed:", error);
   }
