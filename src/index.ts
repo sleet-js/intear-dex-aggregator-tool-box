@@ -23,6 +23,7 @@ export {
 // helpers (raw decoding)
 export {
   decodeInstructionArgs,
+  decodeInstructionArgsAsJson,
   depositFromRoute,
   gasFromRoute,
 } from "./lib/helper/dex_aggregator_decode.ts";

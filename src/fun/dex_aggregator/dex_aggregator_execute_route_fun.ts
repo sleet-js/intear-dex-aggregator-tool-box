@@ -33,7 +33,7 @@ import {
 } from "../../lib/helper/dex_aggregator_client.ts";
 import type { DexAggregatorError } from "../../lib/types/dex_aggregator_error_type.ts";
 import {
-  decodeInstructionArgs,
+  decodeInstructionArgsAsJson,
   depositFromRoute,
   gasFromRoute,
 } from "../../lib/helper/dex_aggregator_decode.ts";
@@ -111,7 +111,13 @@ async function sendOneTx(
     }
     const fc: FunctionCallAction = action.FunctionCall;
     const context = `${tx.receiver_id}.${fc.method_name}`;
-    const args = decodeInstructionArgs(fc.args, context);
+    // Decode the base64 args into a parsed JSON object (falling back
+    // to a string or Uint8Array for legacy raw-binary payloads).
+    // Returning an object — not a Uint8Array — avoids a wallet-side
+    // serialization trap where JSON.stringify(Uint8Array) yields an
+    // opaque `{ "0": 123, "1": 34, ... }` object that the contract
+    // cannot parse.
+    const args = decodeInstructionArgsAsJson(fc.args, context);
     const gas = gasFromRoute(fc.gas);
     const deposit = depositFromRoute(fc.deposit);
     // near-kit's `GasInput` is a template literal type that only
@@ -120,17 +126,20 @@ async function sendOneTx(
     // runtime, so we cast to `any` just past the strict template
     // literal check (avoiding pulling in the internal subpath).
     const gasInput: any = gas;
-    // near-kit's `functionCall(contractId, methodName, args, options)`:
-    //  - `args` accepts a `Uint8Array` (passed through to near-connect
-    //    which re-attempts UTF-8+JSON decode; falls back to binary if
-    //    it doesn't decode).
-    //  - `options.gas` accepts a raw gas string ("5000000000000") or
-    //    a "X Tgas" string.
-    //  - `options.attachedDeposit` accepts a bigint of yoctoNEAR.
-    builder = builder.functionCall(tx.receiver_id, fc.method_name, args, {
-      gas: gasInput,
-      attachedDeposit: deposit,
-    });
+    // near-kit's `functionCall(contractId, methodName, args, options)`
+    // accepts `object | Uint8Array`. We always hand it a JSON-parsed
+    // object so the wallet re-serializes the same shape the contract
+    // expects; the Uint8Array fallback path is reserved for legacy
+    // raw-binary payloads.
+    builder = builder.functionCall(
+      tx.receiver_id,
+      fc.method_name,
+      args as object | Uint8Array,
+      {
+        gas: gasInput,
+        attachedDeposit: deposit,
+      },
+    );
   }
   if (verbose) {
     console.log(

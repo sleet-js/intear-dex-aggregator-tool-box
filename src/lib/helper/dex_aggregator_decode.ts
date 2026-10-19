@@ -16,7 +16,12 @@ import { DexAggregatorClientError } from "./dex_aggregator_client.ts";
  *  raw bytes ready for near-kit's `TransactionBuilder.functionCall`.
  *
  *  `context` is included in errors to identify the failing field
- *  (receiver + method). */
+ *  (receiver + method).
+ *
+ *  Note: prefer [`decodeInstructionArgsAsJson`] unless you know the
+ *  args are binary. Raw `Uint8Array` args get JSON-stringified by
+ *  downstream wallet serializers as `{ 0: byte0, 1: byte1, ... }`,
+ *  which the contract does not want. */
 export function decodeInstructionArgs(
   base64Args: string,
   context: string,
@@ -34,6 +39,54 @@ export function decodeInstructionArgs(
       message: String((cause as Error)?.message ?? cause),
     });
   }
+}
+// =================================================
+/** Decode the router's base64 `args` and return a JSON object ready to
+ *  hand to near-kit's `TransactionBuilder.functionCall(contractId,
+ *  methodName, args, options)`.
+ *
+ *  Most router args are valid JSON (the canonical contract-call
+ *  payload), so we decode base64 → UTF-8 → JSON.parse. If the
+ *  payload is not valid JSON we fall back to a string containing the
+ *  base64 (some legacy raw-binary args still work as base64-encoded
+ *  string arguments), and finally to the raw `Uint8Array` for
+ *  true binary.
+ *
+ *  Returning a parsed object (not a `Uint8Array`) avoids a wallet-
+ *  side serialization trap where `JSON.stringify(Uint8Array)`
+ *  yields `{ "0": 123, "1": 34, ... }` — exactly what would have
+ *  been sent to the contract as opaque "byte-indexed" object.
+ *
+ *  `context` is included in errors to identify the failing field
+ *  (receiver + method). */
+export function decodeInstructionArgsAsJson(
+  base64Args: string,
+  context: string,
+): Record<string, unknown> | string | Uint8Array {
+  let bytes: Uint8Array;
+  try {
+    bytes = decodeInstructionArgs(base64Args, context);
+  } catch (err) {
+    throw err;
+  }
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch {
+    // Not valid UTF-8 — return raw bytes; the wallet may have a
+    // binary path (rare in our routes).
+    return bytes;
+  }
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Not valid JSON — return the raw text; some legacy contracts
+    // accept the base64 text straight through.
+  }
+  return text;
 }
 // =================================================
 /** Convert a router `gas` value (raw u64, number-or-string on the
