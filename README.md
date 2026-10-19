@@ -1,4 +1,4 @@
-# intear-dex-aggregator-tool-box
+# @sleet-js/intear-dex-aggregator-tool-box
 
 🟦 Typed **TypeScript** tool box for the [intear dex-aggregator](https://docs.intear.tech/docs/dex-aggregator/) (`GET https://router.intear.tech/route`), designed to be used **with [near-kit](https://github.com/r-near/near-kit) and [near-kit-tool-box-ts](https://github.com/sleet-js/near-kit-tool-box)**: quote routes through this crate's client, sign + send them with your near-kit `Near` client.
 
@@ -11,9 +11,9 @@
 ### 0. Install
 
 ```bash
-bun add intear-dex-aggregator-tool-box
-# peer-style usage with near-kit + near-connect (browser):
-bun add near-kit @hot-labs/near-connect
+bun add @sleet-js/intear-dex-aggregator-tool-box
+# for the browser / wallet path (EXECUTE_ROUTE_BATCHED):
+bun add @near-kit-tool-box/web
 ```
 
 Runs on Bun 1.x and Node 18+ (only runtime constraint is `fetch` + `Uint8Array`).
@@ -26,7 +26,7 @@ Things that stay constant across trades (`referrer_id`, default DEX allow-list, 
 import {
   DEX_AGGREGATOR_CLIENT,
   AMOUNT_IN,
-} from "intear-dex-aggregator-tool-box";
+} from "@sleet-js/intear-dex-aggregator-tool-box";
 
 // configure once (or DEX_AGGREGATOR_CLIENT.FROM_ENV() for env vars)
 const client = new DEX_AGGREGATOR_CLIENT().WITH_REFERRER_ID("you.near");
@@ -41,7 +41,7 @@ import {
   GET_ROUTES,
   GET_BEST_ROUTE,
   WITH_TRADER_ACCOUNT_ID,
-} from "intear-dex-aggregator-tool-box";
+} from "@sleet-js/intear-dex-aggregator-tool-box";
 
 const params = AMOUNT_IN(
   "near",                    // token_in (`near` or an NEP-141 contract id)
@@ -71,7 +71,7 @@ Fee instructions (`is_fee_transaction: true` on the router, or `continue_if_fail
 import {
   EXECUTE_ROUTE_SEQUENTIAL,
   DEX_AGGREGATOR_CLIENT_ERROR,
-} from "intear-dex-aggregator-tool-box";
+} from "@sleet-js/intear-dex-aggregator-tool-box";
 import { Near } from "near-kit";
 // or for a browser: import { near_connect_client } from "@near-kit-tool-box/web";
 
@@ -100,7 +100,7 @@ try {
 ```ts
 import {
   EXECUTE_ROUTE_BATCHED,
-} from "intear-dex-aggregator-tool-box";
+} from "@sleet-js/intear-dex-aggregator-tool-box";
 import { near_connect_client } from "@near-kit-tool-box/web";
 
 const wallet = await near_connect_client().wallet();
