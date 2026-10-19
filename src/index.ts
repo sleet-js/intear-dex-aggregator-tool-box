@@ -83,7 +83,11 @@ export {
   hasFeeLegs,
 } from "./lib/types/dex_aggregator_route_response_type.ts";
 // functions
-export { executeRoute } from "./fun/dex_aggregator/dex_aggregator_execute_route_fun.ts";
+export {
+  executeRoute,
+  type BatchWallet,
+  type ActionLike,
+} from "./fun/dex_aggregator/dex_aggregator_execute_route_fun.ts";
 export {
   getRoutes,
   getBestRoute,

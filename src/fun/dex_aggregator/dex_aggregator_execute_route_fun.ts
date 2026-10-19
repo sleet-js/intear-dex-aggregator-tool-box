@@ -49,15 +49,19 @@ export interface BatchWallet {
 
 /** Minimal `Action` shape we hand to either near-kit or the wallet
  *  adapter — anything `nearActionsToConnectorActions` accepts (and
- *  near-kit's TransactionBuilder.functionCall produces). */
+ *  near-kit's TransactionBuilder.functionCall produces).
+ *
+ *  `gas` must be a string (digits-only — match's near-kit's `GasInput`
+ *  via the `${number}` template branch). `deposit` accepts string
+ *  or bigint (near-kit's `AmountInput` is a union of both). */
 export type ActionLike = {
   functionCall: {
     methodName: string;
     args: unknown;
-    gas: string | bigint;
+    gas: string;
     deposit: string | bigint;
   };
-}
+};
 
 /** Execute one quoted route.
  *
@@ -217,6 +221,14 @@ async function sendOneTx(
   let builder = near.transaction(signerId);
   for (const action of actions) {
     const fc = action.functionCall;
+    // Our prebuilt action shape matches near-kit's internal call form
+    // for the most part. Two type quirks remain:
+    //  - `gas`: near-kit's parameter is the template-literal
+    //    `${number} Tgas` | `${number}.${number} Tgas` | `${number}`,
+    //    which is narrower than `string` from TypeScript's view. Cast
+    //    through unknown — runtime accepts a digits-only string fine.
+    //  - `attachedDeposit`: AmountInput is a union of string | bigint,
+    //    also narrower than our `string | bigint`. Same cast.
     builder = builder.functionCall(
       tx.receiver_id,
       fc.methodName,

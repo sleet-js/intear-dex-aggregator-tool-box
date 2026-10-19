@@ -7,6 +7,7 @@ import {
   getRoutes,
   withReferrerId,
   withTraderAccountId,
+  type BatchWallet,
   type Route,
 } from "../../src/index.ts";
 import {
@@ -195,7 +196,7 @@ async function executeOne(route: Route, index: number): Promise<void> {
     const outcomes = await executeRoute(near_kit_client(), route, {
       signerId,
       verbose: true,
-      wallet: wallet as never,
+      wallet: wallet as BatchWallet,
     });
     const ok = outcomes.every((o) =>
       o.status && typeof o.status === "object" &&
