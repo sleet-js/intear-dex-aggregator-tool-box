@@ -17,13 +17,10 @@ You can paste any token contract into the inputs. Mainnet only — the tool box 
 
 ```sh
 bun install
-bun run dev               # → http://localhost:3000/
-
-# custom port / host (LAN):
-bun --port 5180 ./index.html
+bun run dev               # → http://0.0.0.0:5180/  (LAN-visible)
 ```
 
-The dev server is `bun run index.html` — Bun reads the `<script type="module" src="./src/index.ts">` tag from `index.html`, transpiles the TypeScript on the fly, and serves it. No bundler, no config.
+`bun run server.ts` calls `Bun.serve` with HTML imports — Bun reads the `<script type="module" src="./src/index.ts">` tag from `index.html`, transpiles TypeScript on the fly, and serves it on port 5180 (override with `PORT=...`). Binds 0.0.0.0 so phones on the LAN can reach it. No rsbuild/webpack/vite.
 
 ### What you get
 
@@ -34,6 +31,8 @@ The dev server is `bun run index.html` — Bun reads the `<script type="module" 
 ### Pattern reference
 
 `src/auth.ts` mirrors your sleet-svelte `setup-near-kit` `button_auth.svelte` line for line — `near_connect_client().wallet().getAccounts()` / `.connect()` / `.signOut()`. The tool box already wires `@hot-labs/near-connect`, so no direct import of the wallet adapter is needed.
+
+Mainnet is the tool box's default; no explicit `setNetwork_*` call needed.
 
 ---
 
