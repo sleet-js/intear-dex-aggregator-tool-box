@@ -12,26 +12,23 @@
 // =================================================
 import { DexAggregatorClientError } from "./dex_aggregator_client.ts";
 // =================================================
-/** Decode a base64 `args` payload from an execution instruction into
- *  raw bytes ready for near-kit's `TransactionBuilder.functionCall`.
+/** Decode the router's base64 `args` payload into raw bytes.
  *
- *  `context` is included in errors to identify the failing field
- *  (receiver + method).
- *
- *  Note: prefer [`decodeInstructionArgsAsJson`] unless you know the
- *  args are binary. Raw `Uint8Array` args get JSON-stringified by
- *  downstream wallet serializers as `{ 0: byte0, 1: byte1, ... }`,
- *  which the contract does not want. */
+ *  Uses the platform's native `atob()` for the base64 step — it is
+ *  available in Node 16+, Bun, Deno, and every modern browser, and
+ *  correctly handles `=` padding (an earlier hand-rolled decoder in
+ *  this file was wrong for padded inputs because the `=` char was
+ *  not in its 64-char lookup, so the final byte became `0xff`
+ *  instead of the real value). `context` is included in errors. */
 export function decodeInstructionArgs(
   base64Args: string,
   context: string,
 ): Uint8Array {
-  // We hand-roll a base64 decoder to keep this package dependency-
-  // free for browsers that don't ship Buffer. Node 18+ has
-  // atob/btoa for ASCII inputs but we need binary-safe decoding;
-  // simplest portable path is to slice & re-bin from string indices.
   try {
-    return base64ToBytes(base64Args);
+    const text = atob(base64Args);
+    const bytes = new Uint8Array(text.length);
+    for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i);
+    return bytes;
   } catch (cause) {
     throw new DexAggregatorClientError({
       kind: "base64_decode",
@@ -53,9 +50,9 @@ export function decodeInstructionArgs(
  *  true binary.
  *
  *  Returning a parsed object (not a `Uint8Array`) avoids a wallet-
- *  side serialization trap where `JSON.stringify(Uint8Array)`
- *  yields `{ "0": 123, "1": 34, ... }` — exactly what would have
- *  been sent to the contract as opaque "byte-indexed" object.
+ *  side serialization trap where JSON.stringify(Uint8Array) yields
+ *  `{ "0": 123, "1": 34, ... }` — exactly what would have been
+ *  sent to the contract as opaque "byte-indexed" object.
  *
  *  `context` is included in errors to identify the failing field
  *  (receiver + method). */
@@ -63,14 +60,7 @@ export function decodeInstructionArgsAsJson(
   base64Args: string,
   context: string,
 ): Record<string, unknown> | string | Uint8Array {
-  let bytes: Uint8Array;
-  try {
-    bytes = decodeInstructionArgs(base64Args, context);
-  } catch (err) {
-    throw err;
-  }
-  // Log which branch we'll take so users can confirm in DevTools
-  // whether the decode is hitting the happy path or a fallback.
+  const bytes = decodeInstructionArgs(base64Args, context);
   let text: string | null = null;
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -87,10 +77,6 @@ export function decodeInstructionArgsAsJson(
     );
     return text;
   } catch (err) {
-    // Either invalid UTF-8 or invalid JSON. Surface which, then fall
-    // back to passing raw bytes — near-kit/near-connect will still
-    // forward them; wallets that re-decode may serialize them as a
-    // byte-indexed object, which is a wallet-side bug.
     console.debug(
       `[dex-aggregator.decode] ${context}: bytes(${bytes.length}) did NOT decode — ` +
         (text === null ? "not valid utf-8" : `not valid json (${(err as Error)?.message})`) +
@@ -155,32 +141,6 @@ export function depositFromRoute(deposit: string | number): bigint {
     });
   }
   return BigInt(raw);
-}
-// =================================================
-/** Decode a base64 string to bytes using `Uint8Array` from string.
- *  Compatible with Node 18+, Bun, Deno, and modern browsers. */
-function base64ToBytes(input: string): Uint8Array {
-  const cleaned = input.replace(/[^A-Za-z0-9+/=]/g, "");
-  if (cleaned.length === 0) return new Uint8Array(0);
-  const lookup = new Int8Array(256).fill(-1);
-  for (let i = 0; i < 64; i++) {
-    lookup["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".charCodeAt(i)] = i;
-  }
-  const padding = (cleaned.endsWith("==") ? 2 : cleaned.endsWith("=") ? 1 : 0);
-  const outLen = (cleaned.length / 4) * 3 - padding;
-  const bytes = new Uint8Array(outLen);
-  let p = 0;
-  for (let i = 0; i < cleaned.length; i += 4) {
-    const c0 = lookup[cleaned.charCodeAt(i)] ?? 0;
-    const c1 = lookup[cleaned.charCodeAt(i + 1)] ?? 0;
-    const c2 = lookup[cleaned.charCodeAt(i + 2)] ?? 0;
-    const c3 = lookup[cleaned.charCodeAt(i + 3)] ?? 0;
-    const v = (c0 << 18) | (c1 << 12) | (c2 << 6) | c3;
-    if (p < outLen) bytes[p++] = (v >> 16) & 0xff;
-    if (p < outLen) bytes[p++] = (v >> 8) & 0xff;
-    if (p < outLen) bytes[p++] = v & 0xff;
-  }
-  return bytes;
 }
 // =================================================
 // copyright 2026 by sleet.near

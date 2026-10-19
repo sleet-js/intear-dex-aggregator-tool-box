@@ -127,26 +127,9 @@ function previewArgs(base64Args: string): string {
 }
 
 function base64DecodeForPreview(input: string): Uint8Array {
-  const cleaned = input.replace(/[^A-Za-z0-9+/=]/g, "");
-  if (cleaned.length === 0) return new Uint8Array(0);
-  const lookup = new Int8Array(256).fill(-1);
-  for (let i = 0; i < 64; i++) {
-    lookup["ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".charCodeAt(i)] = i;
-  }
-  const padding = cleaned.endsWith("==") ? 2 : cleaned.endsWith("=") ? 1 : 0;
-  const outLen = (cleaned.length / 4) * 3 - padding;
-  const bytes = new Uint8Array(outLen);
-  let p = 0;
-  for (let i = 0; i < cleaned.length; i += 4) {
-    const c0 = lookup[cleaned.charCodeAt(i)] ?? 0;
-    const c1 = lookup[cleaned.charCodeAt(i + 1)] ?? 0;
-    const c2 = lookup[cleaned.charCodeAt(i + 2)] ?? 0;
-    const c3 = lookup[cleaned.charCodeAt(i + 3)] ?? 0;
-    const v = (c0 << 18) | (c1 << 12) | (c2 << 6) | c3;
-    if (p < outLen) bytes[p++] = (v >> 16) & 0xff;
-    if (p < outLen) bytes[p++] = (v >> 8) & 0xff;
-    if (p < outLen) bytes[p++] = v & 0xff;
-  }
+  const text = atob(input);
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i);
   return bytes;
 }
 // =================================================
