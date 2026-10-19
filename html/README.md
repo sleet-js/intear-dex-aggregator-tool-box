@@ -1,8 +1,8 @@
 # intear dex-aggregator tool box — HTML demo
 
-🌐 Tiny browser UI for the dex-aggregator tool box. Connects via Hot Wallet, types `token in` / `amount in` / `token out` / `referrer`, hits `https://router.intear.tech`, then renders every route with full details and an EXECUTE button per route.
+🌐 Tiny browser UI for the dex-aggregator tool box. Connects via the wallet exposed by `@near-kit-tool-box/web`, types `token in` / `amount in` / `token out` / `referrer`, hits `https://router.intear.tech`, then renders every route with full details and an EXECUTE button per route.
 
-Plain HTML + TypeScript (no React/Preact), bundled with [rsbuild](https://rsbuild.dev/). Same shape as [`sleet-hot-hello/html`](https://github.com/sleetplayground/sleet-hot-hello/tree/main/html).
+Plain HTML + TypeScript (no React/Preact, no bundler). Bun's HTML dev server runs it directly.
 
 ### Defaults
 
@@ -11,23 +11,29 @@ Plain HTML + TypeScript (no React/Preact), bundled with [rsbuild](https://rsbuil
 - token out: `wrap.near`
 - referrer: `ref.huggies.near`
 
-You can paste any token contract into the inputs.
+You can paste any token contract into the inputs. Mainnet only — the tool box defaults to mainnet on first visit.
 
 ### DEV
 
 ```sh
 bun install
-bun run dev
-bun run build
-bun run preview
-bun run typecheck
+bun run dev               # → http://localhost:3000/
+
+# custom port / host (LAN):
+bun --port 5180 ./index.html
 ```
+
+The dev server is `bun run index.html` — Bun reads the `<script type="module" src="./src/index.ts">` tag from `index.html`, transpiles the TypeScript on the fly, and serves it. No bundler, no config.
 
 ### What you get
 
+- **`LOGIN`** — opens the wallet popup, signs in.
 - **`GET ROUTES`** — quotes every viable DEX, prints the full JSON of each route in a `<details>` block, plus a per-route preview of every `NearTransaction` instruction.
-- **`EXECUTE ROUTE #n`** — sends the chosen route using the connected wallet (one popup per `NearTransaction` instruction; the wallet decides how to batch).
-- **`LOGIN`** — required before any execute (quoting is read-only).
+- **`EXECUTE ROUTE #n`** — sends the chosen route using the connected wallet (one popup per `NearTransaction` instruction).
+
+### Pattern reference
+
+`src/auth.ts` mirrors your sleet-svelte `setup-near-kit` `button_auth.svelte` line for line — `near_connect_client().wallet().getAccounts()` / `.connect()` / `.signOut()`. The tool box already wires `@hot-labs/near-connect`, so no direct import of the wallet adapter is needed.
 
 ---
 
