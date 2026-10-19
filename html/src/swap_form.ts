@@ -176,7 +176,7 @@ async function executeOne(route: Route, index: number): Promise<void> {
     btn.textContent = "SENDING...";
   }
   try {
-    const outcomes = await executeRoute(near_kit_client(), route, { signerId });
+    const outcomes = await executeRoute(near_kit_client(), route, { signerId, verbose: true });
     const ok = outcomes.every((o) =>
       o.status && typeof o.status === "object" &&
       "SuccessValue" in o.status,
