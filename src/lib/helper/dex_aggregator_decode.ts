@@ -69,24 +69,36 @@ export function decodeInstructionArgsAsJson(
   } catch (err) {
     throw err;
   }
-  let text: string;
+  // Log which branch we'll take so users can confirm in DevTools
+  // whether the decode is hitting the happy path or a fallback.
+  let text: string | null = null;
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-  } catch {
-    // Not valid UTF-8 — return raw bytes; the wallet may have a
-    // binary path (rare in our routes).
-    return bytes;
-  }
-  try {
     const parsed = JSON.parse(text);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      console.debug(
+        `[dex-aggregator.decode] ${context}: bytes(${bytes.length}) -> text(${text.length}) -> object`,
+      );
       return parsed as Record<string, unknown>;
     }
-  } catch {
-    // Not valid JSON — return the raw text; some legacy contracts
-    // accept the base64 text straight through.
+    // string-shaped JSON (e.g. a quoted string) — pass straight through
+    console.debug(
+      `[dex-aggregator.decode] ${context}: bytes(${bytes.length}) -> text(${text.length}) -> text (not a JSON object)`,
+    );
+    return text;
+  } catch (err) {
+    // Either invalid UTF-8 or invalid JSON. Surface which, then fall
+    // back to passing raw bytes — near-kit/near-connect will still
+    // forward them; wallets that re-decode may serialize them as a
+    // byte-indexed object, which is a wallet-side bug.
+    console.debug(
+      `[dex-aggregator.decode] ${context}: bytes(${bytes.length}) did NOT decode — ` +
+        (text === null ? "not valid utf-8" : `not valid json (${(err as Error)?.message})`) +
+        ` — returning raw bytes`,
+      err,
+    );
+    return bytes;
   }
-  return text;
 }
 // =================================================
 /** Convert a router `gas` value (raw u64, number-or-string on the
