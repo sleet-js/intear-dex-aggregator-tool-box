@@ -16,6 +16,7 @@
   "publishConfig": {
     "access": "public"
   },
+  "workspaces": ["html"],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "swap": "bun run bin/dex_aggregator_swap_bin.ts"
