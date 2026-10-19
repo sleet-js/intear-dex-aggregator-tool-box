@@ -136,15 +136,21 @@ The bin prints a route table (`# | dex | estimated | worst-case | plan | exec | 
 
 ### 5. Run the HTML UI demo
 
-A rsbuild-driven, browser-only demo lives in [`html/`](./html). It uses `@near-kit-tool-box/web` for the wallet, this crate for the dex-aggregator, and Sleetcss for the look. Same shape as `sleet-hot-hello/html`.
+A browser-only demo lives in [`html/`](./html). It uses `@near-kit-tool-box/web` for the wallet and this crate for the dex-aggregator. No bundler — Bun compiles the entrypoint directly into a single self-contained `dist/index.html`.
 
 ```bash
 cd html
 bun install
-bun run dev   # http://localhost:5180 — connect wallet, paste any token
-              # contract pair (defaults: shit-1170.meme-cooking.near → wrap.near,
-              # referrer ref.huggies.near), click GET ROUTES, click EXECUTE per route
+
+bun build --compile --target=browser ./index.html --outdir ./dist
+
+cd dist && python3 -m http.server 5180 --bind 0.0.0.0
+# → http://localhost:5180/ — connect wallet, paste any token
+# contract pair (defaults: shit-1170.meme-cooking.near → wrap.near,
+# referrer ref.huggies.near), click GET ROUTES, click EXECUTE per route
 ```
+
+See [`html/README.md`](./html/README.md) for details and the full list of UX knobs.
 
 ---
 
@@ -185,6 +191,7 @@ Verified live responses (run `bun run swap near 100000000000000000000000 usdt.te
 to develop and publish this package
 ```bash
 bun install
+bun run typecheck
 bun run build
 bun publish --dry-run
 bunx npm login
