@@ -180,15 +180,15 @@ Verified live responses (run `bun run swap near 100000000000000000000000 usdt.te
 
 ---
 
-## COMMANDS
+### DEV
 
+to develop and publish this package
 ```bash
-bun install                                            # lib deps
-bun run typecheck                                      # tsc --noEmit
-bun run swap                                           # interactive bin (no creds)
-
-cd html && bun install && bun run dev                  # rsbuild browser demo on :5180
-cd html && bun run typecheck                           # html demo typecheck
+bun install
+bun run build
+bun publish --dry-run
+bunx npm login
+bun publish --access public
 ```
 
 ---
