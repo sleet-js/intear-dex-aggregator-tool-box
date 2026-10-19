@@ -1,16 +1,17 @@
 // =================================================
 // dex_aggregator_execute_route_fun
-// Execute one quoted `Route` with your near-kit `Near` client.
+// Execute one quoted `Route` against a `near-kit` `Near` client.
 //
-// Browser (wallet) path: every route instruction targets one
-// receiver and IS its own NEAR transaction (NEAR txs are single-
-// receiver). We batch them into a SINGLE wallet popup via
-// `wallet.signAndSendTransactions({ transactions: [...] })` —
-// one popup, one approval, even for Plach's 2-step swap.
+// Backend path (private-key signer, no wallet): one
+// `near.transaction(signer).functionCall(...).send()` per
+// instruction, sequentially.
 //
-// Backend (privateKey) path: no wallet is involved, so we just call
-// `near.transaction(signer).functionCall(...).send()` once per
-// instruction (sequential, await each) and stream outcomes.
+// Browser path (wallet attached, e.g. via `fromHotConnect` adapter):
+// callers may pass a `wallet` directly — when set, we hand the
+// wallet an array of prebuilt transactions and let it batch them
+// into ONE popup via `wallet.signAndSendTransactions({ transactions:
+// [...] })`. Each NEAR transaction is single-receiver; the wallet
+// signs and broadcasts each in nonce order.
 //
 // An instruction flagged `continue_if_failed` (or its router alias
 // `is_fee_transaction`) is skipped (with an stderr note) when its
@@ -36,30 +37,45 @@ import {
   gasFromRoute,
 } from "../../lib/helper/dex_aggregator_decode.ts";
 // =================================================
-/** Execute one quoted route with your near-kit `Near` client.
+/** Minimal contract callers need to satisfy when batching. The
+ *  underlying `@hot-labs/near-connect` `NearWalletBase` matches
+ *  this exactly. */
+export interface BatchWallet {
+  signAndSendTransactions(params: {
+    signerId?: string;
+    transactions: Array<{ receiverId: string; actions: ActionLike[] }>;
+  }): Promise<FinalExecutionOutcome[]>;
+}
+
+/** Minimal `Action` shape we hand to either near-kit or the wallet
+ *  adapter — anything `nearActionsToConnectorActions` accepts (and
+ *  near-kit's TransactionBuilder.functionCall produces). */
+export type ActionLike = {
+  functionCall: {
+    methodName: string;
+    args: unknown;
+    gas: string | bigint;
+    deposit: string | bigint;
+  };
+}
+
+/** Execute one quoted route.
  *
- *  Each `NearTransaction` instruction becomes one NEAR transaction
- *  (a NEAR tx has exactly one receiver). On the browser path we
- *  hand the wallet an array of prebuilt transactions — it signs
- *  all of them under ONE popup; on the backend we send each
- *  sequentially via the local signer.
- *
- *  Returns one outcome per instruction that actually went out (fee
- *  instructions that failed and were skipped are not in the result).
- *
- *  Throws a `DexAggregatorClientError` of kind `"near"` when a
- *  non-tolerated transaction fails. */
+ *  When `wallet` is provided the whole route is sent to the wallet
+ *  in ONE popup via `wallet.signAndSendTransactions({ transactions
+ *  })`. When omitted, the function falls back to the per-tx
+ *  near-kit path (one NEAR transaction per route instruction).
+ *  Per-instruction `continue_if_failed` is honored in both paths. */
 export async function executeRoute(
   near: Near,
   route: Route,
   options: {
     signerId?: string;
     verbose?: boolean;
-    /** Override batched-wallet dispatch. When true and a wallet is
-     *  attached, build all transactions and call
-     *  `wallet.signAndSendTransactions({ transactions: [...] })`
-     *  in ONE popup. Default: true. */
-    batchTransactions?: boolean;
+    /** Wallet batching adapter. When present, we hand the wallet
+     *  all transactions at once (one popup). When omitted, we
+     *  fall back to near-kit's per-tx path. */
+    wallet?: BatchWallet;
   } = {},
 ): Promise<FinalExecutionOutcome[]> {
   const signerId = options.signerId ?? resolveDefaultSignerId(near);
@@ -71,13 +87,12 @@ export async function executeRoute(
     });
   }
   const verbose = options.verbose !== false;
-  // Pre-extract every (receiverId, actions[]) pair so we can feed it
-  // to either the wallet batch path or the per-tx path without two
-  // different code paths through the action builder.
+  // Pre-extract every (receiverId, actions[]) pair so both paths
+  // share one source of truth for the actions.
   const entries: Array<{
     instructionIndex: number;
     tx: NearTransactionInstruction;
-    actions: BuildAction[];
+    actions: ActionLike[];
   }> = [];
   for (let i = 0; i < route.execution_instructions.length; i++) {
     const instruction = route.execution_instructions[i];
@@ -96,80 +111,19 @@ export async function executeRoute(
   if (entries.length === 0) return [];
 
   // Wallet batch path: ONE popup, ALL transactions.
-  const wallet = resolveWallet(near);
-  const useBatch = (options.batchTransactions !== false) && wallet &&
-    typeof (wallet as { signAndSendTransactions?: unknown })
-      .signAndSendTransactions === "function";
-  if (useBatch) {
-    return sendBatched(wallet as WalletLike, entries, signerId, verbose);
+  if (options.wallet) {
+    return sendBatched(options.wallet, entries, signerId, verbose);
   }
-
   // Per-tx path: one send per instruction, sequential.
-  const outcomes: FinalExecutionOutcome[] = [];
-  for (const entry of entries) {
-    try {
-      const outcome = await sendOneTx(near, signerId, entry.tx, entry.actions, verbose);
-      outcomes.push(outcome);
-    } catch (cause) {
-      if (shouldContinueOnFailure(entry.tx)) {
-        if (verbose) {
-          console.warn(
-            `[dex-aggregator] note: tx ${entry.instructionIndex} to ${entry.tx.receiver_id} failed but continue_if_failed is set, skipping: ${(cause as Error).message ?? cause}`,
-          );
-        }
-        continue;
-      }
-      throw wrapNearError(cause);
-    }
-  }
-  return outcomes;
-}
-// =================================================
-/** Minimal contract: NearWalletBase's `signAndSendTransactions`. We
- *  accept any object that implements the two methods we need; we
- *  don't depend on near-kit's private types. */
-interface WalletLike {
-  signAndSendTransaction(params: {
-    signerId?: string;
-    receiverId: string;
-    actions: unknown[];
-  }): Promise<FinalExecutionOutcome>;
-  signAndSendTransactions(params: {
-    signerId?: string;
-    transactions: Array<{ receiverId: string; actions: unknown[] }>;
-  }): Promise<FinalExecutionOutcome[]>;
-  signOut?: (data?: { network?: string }) => Promise<void>;
-}
-
-/** Shape we build for each `FunctionCall` action — matches what
- *  near-kit's TransactionBuilder produces internally, so the
- *  wallet's `signAndSendTransactions` accepts it as-is (the
- *  `near-connect` adapter normalizes it into the wallet's
- *  `ConnectorAction` JSON shape at the protocol boundary).
- *
- *  `gas` must be a string (z.string() in near-kit's normalizeGas),
- *  `deposit` accepts string | bigint (the union in normalizeAmount). */
-type BuildAction = { functionCall: {
-  methodName: string;
-  args: unknown;
-  gas: string;
-  deposit: string | bigint;
-} };
-
-function resolveWallet(near: Near): WalletLike | undefined {
-  const candidate = (near as unknown as { wallet?: unknown }).wallet;
-  if (!candidate || typeof (candidate as WalletLike).signAndSendTransaction !== "function") {
-    return undefined;
-  }
-  return candidate as WalletLike;
+  return sendOneAtATime(near, entries, signerId, verbose);
 }
 // =================================================
 async function sendBatched(
-  wallet: WalletLike,
+  wallet: BatchWallet,
   entries: Array<{
     instructionIndex: number;
     tx: NearTransactionInstruction;
-    actions: BuildAction[];
+    actions: ActionLike[];
   }>,
   signerId: string,
   verbose: boolean,
@@ -186,9 +140,6 @@ async function sendBatched(
         .join(", "),
     );
   }
-  // The wallet returns FinalExecutionOutcome[] — same shape as
-  // near-kit's per-tx builder, so callers don't need to know which
-  // path we took.
   let rawOutcomes: FinalExecutionOutcome[];
   try {
     rawOutcomes = await wallet.signAndSendTransactions({
@@ -198,13 +149,6 @@ async function sendBatched(
   } catch (cause) {
     throw wrapNearError(cause);
   }
-  if (verbose) {
-    console.log(
-      `[dex-aggregator] wallet returned ${rawOutcomes.length} outcome(s)`,
-    );
-  }
-  // Honor per-instruction continue_if_failed by mapping batch
-  // outcomes back to entries.
   const outcomes: FinalExecutionOutcome[] = [];
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
@@ -233,11 +177,41 @@ async function sendBatched(
   return outcomes;
 }
 // =================================================
+async function sendOneAtATime(
+  near: Near,
+  entries: Array<{
+    instructionIndex: number;
+    tx: NearTransactionInstruction;
+    actions: ActionLike[];
+  }>,
+  signerId: string,
+  verbose: boolean,
+): Promise<FinalExecutionOutcome[]> {
+  const outcomes: FinalExecutionOutcome[] = [];
+  for (const entry of entries) {
+    try {
+      const outcome = await sendOneTx(near, signerId, entry.tx, entry.actions, verbose);
+      outcomes.push(outcome);
+    } catch (cause) {
+      if (shouldContinueOnFailure(entry.tx)) {
+        if (verbose) {
+          console.warn(
+            `[dex-aggregator] note: tx ${entry.instructionIndex} to ${entry.tx.receiver_id} failed but continue_if_failed is set, skipping: ${(cause as Error).message ?? cause}`,
+          );
+        }
+        continue;
+      }
+      throw wrapNearError(cause);
+    }
+  }
+  return outcomes;
+}
+// =================================================
 async function sendOneTx(
   near: Near,
   signerId: string,
   tx: NearTransactionInstruction,
-  actions: BuildAction[],
+  actions: ActionLike[],
   verbose: boolean,
 ): Promise<FinalExecutionOutcome> {
   let builder = near.transaction(signerId);
@@ -261,16 +235,16 @@ async function sendOneTx(
   return (await builder.send()) as FinalExecutionOutcome;
 }
 // =================================================
-/** Build the typed action objects for one route instruction. We
- *  construct them in the same shape near-kit's TransactionBuilder
- *  produces internally (i.e. { functionCall: { methodName, args,
- *  gas, deposit } }), so the batched wallet path and the per-tx
- *  path both see identical action shapes. */
+/** Build the typed action objects for one route instruction. They
+ *  match what near-kit's `TransactionBuilder.functionCall` produces
+ *  internally (`{ functionCall: { methodName, args, gas, deposit } }`),
+ *  so the wallet adapter's `nearActionsToConnectorActions` can
+ *  normalize them straight to the wallet protocol format. */
 function buildActionsForTx(
   tx: NearTransactionInstruction,
   verbose: boolean,
-): BuildAction[] {
-  const actions: BuildAction[] = [];
+): ActionLike[] {
+  const actions: ActionLike[] = [];
   for (let i = 0; i < tx.actions.length; i++) {
     const act = tx.actions[i]!;
     if (!("FunctionCall" in act)) {
@@ -294,11 +268,10 @@ function buildActionsForTx(
         "args:", args,
       );
     }
-    // near-kit's `gas` option expects a string (passes through GasSchema
-    // which is z.string()); `attachedDeposit` accepts either string or
-    // bigint (AmountSchema is union). Keep gas as a string to match
-    // near-kit's accepted type — passing bigint here triggers a Zod
-    // parse error in normalizeGas().
+    // near-kit's `gas` option expects a string (z.string() in
+    // normalizeGas); `attachedDeposit` accepts string or bigint
+    // (union in normalizeAmount). Keep gas as a string to avoid the
+    // bigint Zod error we hit earlier.
     actions.push({
       functionCall: {
         methodName: fc.method_name,

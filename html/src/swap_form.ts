@@ -176,7 +176,27 @@ async function executeOne(route: Route, index: number): Promise<void> {
     btn.textContent = "SENDING...";
   }
   try {
-    const outcomes = await executeRoute(near_kit_client(), route, { signerId, verbose: true });
+    // Browser path: hand the wallet the whole route in a single popup.
+    // near-kit's wrapper exposes only signAndSendTransaction (singular)
+    // — calling it N times would mean N popups. Bypass near-kit and go
+    // directly to the raw NearConnector's wallet, which DOES expose
+    // signAndSendTransactions (plural). We pass the raw wallet to
+    // executeRoute, which then dispatches one popup containing all
+    // route transactions (storage_deposit, register_assets,
+    // near_withdraw, deposit_near, etc.).
+    const wallet = await near_connect_client().wallet();
+    if (!wallet || typeof (wallet as { signAndSendTransactions?: unknown })
+      .signAndSendTransactions !== "function") {
+      throw new Error(
+        "Connected wallet does not support signAndSendTransactions; " +
+        "please reconnect a NEAR Connect / Intear Wallet session.",
+      );
+    }
+    const outcomes = await executeRoute(near_kit_client(), route, {
+      signerId,
+      verbose: true,
+      wallet: wallet as never,
+    });
     const ok = outcomes.every((o) =>
       o.status && typeof o.status === "object" &&
       "SuccessValue" in o.status,
