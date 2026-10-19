@@ -4,12 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun run server.ts",
-    "typecheck": "tsc --noEmit"
+    "dev": "bun run index.html"
   },
   "dependencies": {
     "@near-kit-tool-box/web": "^0.1.7",
     "near-kit": "^0.20.2"
   }
 }
-

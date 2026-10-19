@@ -1,13 +1,3 @@
-// ==========================================
-// swap_form
-// Read the form, fetch routes via `getRoutes`, render every route
-// with full details, then let the user execute a route (one wallet
-// popup per NearTransaction instruction).
-//
-// Uses the same canonical pattern as the sleet-svelte demos:
-//   * `near_connect_client()` for wallet session / accounts.
-//   * `near_kit_client()` for the executing `Near` instance.
-// ==========================================
 import {
   DexAggregatorClient,
   DexAggregatorClientError,
@@ -18,14 +8,22 @@ import {
   withReferrerId,
   withTraderAccountId,
   type Route,
-} from "../../../src/index.ts";
+} from "../../src/index.ts";
 import {
   near_connect_client,
   near_kit_client,
 } from "@near-kit-tool-box/web";
 // ==========================================
-const client = new DexAggregatorClient();
+// Swap form: quote via DexAggregatorClient, render every route
+// with full details, then let the user execute a route with the
+// connected wallet.
+//
+// Wallet/auth state is read via `near_connect_client().wallet()` and
+// `near_kit_client()` — exactly the same pattern as the svelte
+// setup-near-kit demo (`@near-kit-tool-box/web`).
 // ==========================================
+const client = new DexAggregatorClient();
+
 function $(id: string): string {
   const el = document.getElementById(id) as HTMLInputElement | null;
   if (!el) throw new Error(`input #${id} not found`);
@@ -83,8 +81,6 @@ async function readParams() {
   }
   let params = amountIn(tokenIn, tokenOut, amountInRaw);
   if (referrer) params = withReferrerId(params, referrer);
-  // Storage-deposit legs need a trader account. Use the connected
-  // wallet account when we have one so the router can plan storage.
   const acct = await getConnectedAccountId();
   if (acct) params = withTraderAccountId(params, acct);
   return params;
@@ -95,39 +91,33 @@ function renderRouteCard(route: Route, index: number): HTMLElement {
   card.appendChild(el("h3", { text: `#${index} — ${route.dex_id}` }));
   card.appendChild(el("div", {
     cls: "small",
-    text: `out: ${route.token_output}  •  estimated: ${route.estimated_amount.amount_out ?? route.estimated_amount.amount_in ?? "?"} ${route.estimated_amount.amount_out !== undefined ? "(out)" : "(in)"}`,
+    text: `out: ${route.token_output}`,
   }));
 
-  // Raw route JSON in a <details> so it doesn't blow up the page.
   const det = el("details");
   det.appendChild(el("summary", { text: "route JSON" }));
   det.appendChild(el("pre", { text: JSON.stringify(route, null, 2) }));
   card.appendChild(det);
 
-  // Per-instruction preview.
   const instr = el("div");
   instr.appendChild(el("strong", { text: "Execution instructions:" }));
   instr.appendChild(el("br"));
-  if (route.execution_instructions.length === 0) {
-    instr.appendChild(el("em", { text: "(none)" }));
-  } else {
-    route.execution_instructions.forEach((instrOrTx, i) => {
-      const tx = instrOrTx.NearTransaction;
-      const fee =
-        tx.is_fee_transaction === true || tx.continue_if_failed === true
-          ? "  [fee tx]"
-          : "";
+  route.execution_instructions.forEach((instrOrTx, i) => {
+    const tx = instrOrTx.NearTransaction;
+    const fee =
+      tx.is_fee_transaction === true || tx.continue_if_failed === true
+        ? "  [fee tx]"
+        : "";
+    instr.appendChild(el("div", {
+      text: `[tx ${i}] receiver=${tx.receiver_id}  actions=${tx.actions.length}${fee}`,
+    }));
+    tx.actions.forEach((act, j) => {
+      const fc = act.FunctionCall;
       instr.appendChild(el("div", {
-        text: `[tx ${i}] receiver=${tx.receiver_id}  actions=${tx.actions.length}${fee}`,
+        text: `   action ${j}: ${fc.method_name}(...) gas=${fc.gas} deposit=${fc.deposit}`,
       }));
-      tx.actions.forEach((act, j) => {
-        const fc = act.FunctionCall;
-        instr.appendChild(el("div", {
-          text: `   action ${j}: ${fc.method_name}(...) gas=${fc.gas} deposit=${fc.deposit}`,
-        }));
-      });
     });
-  }
+  });
   card.appendChild(instr);
 
   const execBtn = el("button", {
@@ -155,13 +145,13 @@ function renderRoutes(routes: Route[]): void {
 function renderError(err: unknown): void {
   const out = document.getElementById("ROUTES_OUTPUT");
   if (!out) return;
-  out.replaceChildren();
   const msg =
     err instanceof DexAggregatorClientError
       ? formatDexAggregatorError(err.error)
       : err instanceof Error
         ? err.message
         : String(err);
+  out.replaceChildren();
   out.appendChild(el("div", { cls: "error", text: `Error: ${escape(msg)}` }));
   out.appendChild(el("h3", { text: "Raw error (also in DevTools console)" }));
   out.appendChild(el("pre", { text: msg }));
@@ -196,7 +186,9 @@ async function executeOne(route: Route, index: number): Promise<void> {
       }));
       outcomes.forEach((o, i) => {
         const hash = (o.transaction?.hash as string | undefined) ?? "?";
-        out.appendChild(el("div", { html: `<a href="https://nearblocks.io/txns/${hash}" target="_blank" rel="noopener noreferrer">[tx ${i}] ${hash}</a>` }));
+        out.appendChild(el("div", {
+          html: `<a href="https://nearblocks.io/txns/${hash}" target="_blank" rel="noopener noreferrer">[tx ${i}] ${hash}</a>`,
+        }));
       });
     }
   } catch (caught: unknown) {
