@@ -1,11 +1,16 @@
 import { near_connect_client } from "@near-kit-tool-box/web";
 // ==========================================
-// LOGIN / LOGOUT button. Mirrors sleet-hot-hello/html pattern so
-// the UI matches the rest of the demos.
+// LOGIN / LOGOUT button.
 //
-// We surface every error inline below the LOGIN button so the user
-// can see what's wrong (popup blocked, no extension, etc.) rather
-// than failing silently on a phone.
+// Follows the canonical pattern from the sleet-svelte
+// "setup-near-kit" demo (button_auth.svelte): the tool box exposes
+// `near_connect_client()` which returns the underlying NearConnector;
+// we then call `.wallet().getAccounts()` to read existing accounts
+// and `.connect()` to start a new wallet session.
+//
+// We DO NOT import @hot-labs/near-connect here — the tool box
+// already wires it. Adding it directly just creates version drift
+// and a second NearConnector instance.
 // ==========================================
 let isSignedIn = false;
 let accountId: string | null = null;
@@ -18,18 +23,23 @@ function showStatus(text: string, kind: "" | "ok" | "err" = ""): void {
   const el = statusLineEl();
   if (!el) return;
   el.textContent = text;
-  el.className = kind;
+  el.className = `small ${kind}`.trim();
+}
+
+async function getAccounts(): Promise<string[]> {
+  const wallet = await near_connect_client().wallet();
+  const accounts = await wallet.getAccounts();
+  return (accounts ?? []).map((a) => a.accountId);
 }
 
 async function updateAuthStatus(): Promise<void> {
   try {
-    const result = await near_connect_client().getConnectedWallet();
-    const firstAccount = result.accounts[0];
-    if (firstAccount) {
-      console.log("[demo] connected account:", firstAccount.accountId);
-      accountId = firstAccount.accountId;
+    const ids = await getAccounts();
+    if (ids.length > 0 && ids[0]) {
+      console.log("[demo] connected account:", ids[0]);
+      accountId = ids[0];
       isSignedIn = true;
-      showStatus(`connected as ${firstAccount.accountId}`, "ok");
+      showStatus(`connected as ${ids[0]}`, "ok");
     } else {
       console.log("[demo] not connected");
       accountId = null;
@@ -40,7 +50,10 @@ async function updateAuthStatus(): Promise<void> {
     console.log("[demo] no wallet session:", err);
     accountId = null;
     isSignedIn = false;
-    showStatus(`no wallet session: ${(err as Error)?.message ?? err}`);
+    showStatus(
+      `no wallet session: ${(err as Error)?.message ?? String(err)}`,
+      "err",
+    );
   }
 }
 
@@ -74,14 +87,16 @@ async function handleLogin(): Promise<void> {
 }
 
 async function handleLogout(): Promise<void> {
-  showStatus("logging out...");
   try {
     const wallet = await near_connect_client().wallet();
     wallet.signOut();
     showStatus("logged out", "ok");
   } catch (error) {
     console.error("[demo] logout failed:", error);
-    showStatus(`logout failed: ${(error as Error)?.message ?? String(error)}`, "err");
+    showStatus(
+      `logout failed: ${(error as Error)?.message ?? String(error)}`,
+      "err",
+    );
   } finally {
     await updateAuthStatus();
     renderAuthButton();
