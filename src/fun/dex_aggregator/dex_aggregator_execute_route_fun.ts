@@ -118,6 +118,16 @@ async function sendOneTx(
     // opaque `{ "0": 123, "1": 34, ... }` object that the contract
     // cannot parse.
     const args = decodeInstructionArgsAsJson(fc.args, context);
+    // Force a clear diagnosis so we can tell the exact type — even
+    // when the helper is the shipped ts version and the bundle was
+    // rebuilt. ObjectIsUint8Array check is what matters here.
+    console.log(`[dex-aggregator.exec] ${context}`,
+      "raw_b64.length:", fc.args.length,
+      "args is Uint8Array?", args instanceof Uint8Array,
+      "args typeof:", typeof args,
+      "args.kind:", args instanceof Uint8Array ? "Uint8Array" : (typeof args === "object" && !Array.isArray(args) ? "Object" : typeof args),
+      "value:", args instanceof Uint8Array ? `<bytes ${args.length}>` : args,
+    );
     // Log what we are about to sign so the user can compare against
     // the args shown in their wallet popup — useful when debugging
     // wallet-side re-serialization issues.
