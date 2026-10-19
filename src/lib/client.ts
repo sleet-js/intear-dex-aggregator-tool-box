@@ -17,15 +17,15 @@
 import {
   FORMAT_DEX_AGGREGATOR_ERROR,
   type DEX_AGGREGATOR_ERROR,
-} from "./error_type.ts";
+} from "./error_type";
 import {
   DESCRIBE_AMOUNT,
   type QUOTE_PARAMS,
-} from "./quote_params_type.ts";
+} from "./quote_params_type";
 import {
   COERCE_ROUTE,
   type ROUTE,
-} from "./route_response_type.ts";
+} from "./route_response_type";
 // =================================================
 /** A typed error class so it can be `instanceof`-checked and `throw`n
  *  just like a normal error. Always carries a typed `error: DEX_AGGREGATOR_ERROR`

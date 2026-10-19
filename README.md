@@ -199,7 +199,6 @@ bun publish --access public
 - aggregator source: <https://github.com/INTEARnear/dex-aggregator>
 - near-kit (TypeScript): <https://github.com/r-near/near-kit>
 - near-kit tool box TS: <https://github.com/sleet-js/near-kit-tool-box>
-- rust twin: <https://github.com/sleet-rs/intear-dex-aggregator-tool-box>
 
 ==================
 <br/>

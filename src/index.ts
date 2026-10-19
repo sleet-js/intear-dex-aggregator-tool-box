@@ -18,21 +18,21 @@ export {
   DEX_AGGREGATOR_BASE_URL,
   DEX_AGGREGATOR_DEFAULT_MAX_WAIT_MS,
   DEX_AGGREGATOR_KNOWN_DEXES,
-} from "./lib/client.ts";
+} from "./lib/client";
 // helpers (raw decoding)
 export {
   DECODE_INSTRUCTION_ARGS,
   DECODE_INSTRUCTION_ARGS_AS_JSON,
   DEPOSIT_FROM_ROUTE,
   GAS_FROM_ROUTE,
-} from "./lib/decode.ts";
+} from "./lib/decode";
 // formatters (used by the bin / your UI)
 export {
   PRINT_ROUTES_TABLE,
   PRINT_ROUTE_PREVIEW,
   ROUTE_ROW,
   SHORT_TOKEN,
-} from "./lib/format.ts";
+} from "./lib/format";
 // types
 export type {
   DEX_AGGREGATOR_ERROR,
@@ -43,14 +43,14 @@ export type {
   DEX_AGGREGATOR_BASE64_DECODE_ERROR,
   DEX_AGGREGATOR_INVALID_NUMBER_ERROR,
   DEX_AGGREGATOR_NEAR_ERROR,
-} from "./lib/error_type.ts";
-export { FORMAT_DEX_AGGREGATOR_ERROR } from "./lib/error_type.ts";
+} from "./lib/error_type";
+export { FORMAT_DEX_AGGREGATOR_ERROR } from "./lib/error_type";
 export type {
   QUOTE_PARAMS,
   QUOTE_AMOUNT,
   SLIPPAGE,
   TOKEN_ID,
-} from "./lib/quote_params_type.ts";
+} from "./lib/quote_params_type";
 export {
   AMOUNT_IN,
   AMOUNT_OUT,
@@ -63,7 +63,7 @@ export {
   WITH_TRADER_ACCOUNT_ID,
   DESCRIBE_AMOUNT,
   DEFAULT_SLIPPAGE,
-} from "./lib/quote_params_type.ts";
+} from "./lib/quote_params_type";
 export type {
   ROUTE,
   ROUTE_AMOUNT,
@@ -71,7 +71,7 @@ export type {
   NEAR_TRANSACTION_INSTRUCTION,
   NEAR_TRANSACTION_ACTION,
   FUNCTION_CALL_ACTION,
-} from "./lib/route_response_type.ts";
+} from "./lib/route_response_type";
 export {
   BEST_AMOUNT,
   AMOUNT_MODE,
@@ -80,7 +80,7 @@ export {
   IS_DIRECTLY_EXECUTABLE,
   SHOULD_CONTINUE_ON_FAILURE,
   HAS_FEE_LEGS,
-} from "./lib/route_response_type.ts";
+} from "./lib/route_response_type";
 // functions
 export {
   EXECUTE_ROUTE_SEQUENTIAL,
@@ -88,9 +88,9 @@ export {
   type BATCH_WALLET,
   type ACTION_LIKE,
   type EXECUTE_ROUTE_OPTIONS,
-} from "./fun/execute_route.ts";
+} from "./fun/execute_route";
 export {
   GET_ROUTES,
   GET_BEST_ROUTE,
-} from "./fun/get_routes.ts";
+} from "./fun/get_routes";
 // =================================================

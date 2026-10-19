@@ -8,13 +8,14 @@
     "type": "git",
     "url": "https://github.com/sleet-js/intear-dex-aggregator-tool-box.git"
   },
-  "module": "dist/index.ts",
-  "types": "dist/index.ts",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
-      "types": "./dist/index.ts",
-      "default": "./dist/index.ts"
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
     }
   },
   "publishConfig": {
@@ -22,7 +23,7 @@
   },
   "workspaces": ["html"],
   "scripts": {
-    "build": "bun run scripts/build.ts",
+    "build": "tsc",
     "typecheck": "tsc --noEmit",
     "swap": "bun run bin/dex_aggregator_swap_bin.ts",
     "prepublishOnly": "bun run build"
@@ -38,13 +39,7 @@
     "typescript": "^5"
   },
   "files": [
-    "README.md",
-    "LICENSE",
-    "src/**/*",
-    "!src/**/*.test.ts",
-    "dist/**/*",
-    "!dist/**/*.test.ts",
-    "!dist/**/*.test.ts.map"
+    "dist"
   ],
   "//": "compatible with near-kit and near-kit-tool-box-ts; quoted deps are unpinned for max flexibility — bump together with near-kit."
 }

@@ -31,16 +31,16 @@ import {
   type NEAR_TRANSACTION_INSTRUCTION,
   type ROUTE,
   SHOULD_CONTINUE_ON_FAILURE,
-} from "../lib/route_response_type.ts";
+} from "../lib/route_response_type";
 import {
   DEX_AGGREGATOR_CLIENT_ERROR,
-} from "../lib/client.ts";
-import type { DEX_AGGREGATOR_ERROR } from "../lib/error_type.ts";
+} from "../lib/client";
+import type { DEX_AGGREGATOR_ERROR } from "../lib/error_type";
 import {
   DECODE_INSTRUCTION_ARGS_AS_JSON,
   DEPOSIT_FROM_ROUTE,
   GAS_FROM_ROUTE,
-} from "../lib/decode.ts";
+} from "../lib/decode";
 // =================================================
 /** Minimal wallet contract for the batched browser path. Matches the
  *  `signAndSendTransactions` method on `@hot-labs/near-connect`'s

@@ -11,7 +11,7 @@ import {
   type FUNCTION_CALL_ACTION,
   type NEAR_TRANSACTION_INSTRUCTION,
   type ROUTE,
-} from "./route_response_type.ts";
+} from "./route_response_type";
 // =================================================
 /** Shorten a token id for tables (`usdt.tether-token.near` stays,
  *  `nep141:<64-hex>` becomes `nep141:17208628…36133a1`). */

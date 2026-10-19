@@ -10,7 +10,7 @@
 // decimal string, so we pre-process once here and call sites stay
 // tidy.
 // =================================================
-import { DEX_AGGREGATOR_CLIENT_ERROR } from "./client.ts";
+import { DEX_AGGREGATOR_CLIENT_ERROR } from "./client";
 // =================================================
 /** Decode the router's base64 `args` payload into raw bytes.
  *
