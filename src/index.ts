@@ -3,9 +3,9 @@
 // Typed client + near-kit execution helpers for the intear
 // dex-aggregator (`GET https://router.intear.tech/route`).
 //
-// Quote with `DexAggregatorClient`, execute with
-// `executeRouteSequential` (backend / near-kit `Near`) or
-// `executeRouteBatched` (browser / `@hot-labs/near-connect` wallet).
+// Quote with `DEX_AGGREGATOR_CLIENT`, execute with
+// `EXECUTE_ROUTE_SEQUENTIAL` (backend / near-kit `Near`) or
+// `EXECUTE_ROUTE_BATCHED` (browser / `@hot-labs/near-connect` wallet).
 //
 // Quoting is read-only (no credentials). Executing needs a funded
 // mainnet signer — the router is mainnet only.
@@ -13,84 +13,84 @@
 // =================================================
 // client
 export {
-  DexAggregatorClient,
-  DexAggregatorClientError,
+  DEX_AGGREGATOR_CLIENT,
+  DEX_AGGREGATOR_CLIENT_ERROR,
   DEX_AGGREGATOR_BASE_URL,
   DEX_AGGREGATOR_DEFAULT_MAX_WAIT_MS,
   DEX_AGGREGATOR_KNOWN_DEXES,
-} from "./lib/helper/dex_aggregator_client.ts";
+} from "./lib/client.ts";
 // helpers (raw decoding)
 export {
-  decodeInstructionArgs,
-  decodeInstructionArgsAsJson,
-  depositFromRoute,
-  gasFromRoute,
-} from "./lib/helper/dex_aggregator_decode.ts";
+  DECODE_INSTRUCTION_ARGS,
+  DECODE_INSTRUCTION_ARGS_AS_JSON,
+  DEPOSIT_FROM_ROUTE,
+  GAS_FROM_ROUTE,
+} from "./lib/decode.ts";
 // formatters (used by the bin / your UI)
 export {
-  printRoutesTable,
-  printRoutePreview,
-  routeRow,
-  shortToken,
-} from "./lib/helper/dex_aggregator_format.ts";
+  PRINT_ROUTES_TABLE,
+  PRINT_ROUTE_PREVIEW,
+  ROUTE_ROW,
+  SHORT_TOKEN,
+} from "./lib/format.ts";
 // types
 export type {
-  DexAggregatorError,
-  DexAggregatorRouteNotFoundError,
-  DexAggregatorInvalidParamsError,
-  DexAggregatorHttpError,
-  DexAggregatorParseError,
-  DexAggregatorBase64DecodeError,
-  DexAggregatorInvalidNumberError,
-  DexAggregatorNearError,
-} from "./lib/types/dex_aggregator_error_type.ts";
-export { formatDexAggregatorError } from "./lib/types/dex_aggregator_error_type.ts";
+  DEX_AGGREGATOR_ERROR,
+  DEX_AGGREGATOR_ROUTE_NOT_FOUND_ERROR,
+  DEX_AGGREGATOR_INVALID_PARAMS_ERROR,
+  DEX_AGGREGATOR_HTTP_ERROR,
+  DEX_AGGREGATOR_PARSE_ERROR,
+  DEX_AGGREGATOR_BASE64_DECODE_ERROR,
+  DEX_AGGREGATOR_INVALID_NUMBER_ERROR,
+  DEX_AGGREGATOR_NEAR_ERROR,
+} from "./lib/error_type.ts";
+export { FORMAT_DEX_AGGREGATOR_ERROR } from "./lib/error_type.ts";
 export type {
-  QuoteParams,
-  QuoteAmount,
-  Slippage,
-  TokenId,
-} from "./lib/types/dex_aggregator_quote_params_type.ts";
+  QUOTE_PARAMS,
+  QUOTE_AMOUNT,
+  SLIPPAGE,
+  TOKEN_ID,
+} from "./lib/quote_params_type.ts";
 export {
-  amountIn,
-  amountOut,
-  withAutoSlippage,
-  withDexes,
-  withFixedSlippage,
-  withMaxWaitMs,
-  withReferrerId,
-  withSigningPublicKey,
-  withTraderAccountId,
-  describeAmount,
+  AMOUNT_IN,
+  AMOUNT_OUT,
+  WITH_AUTO_SLIPPAGE,
+  WITH_DEXES,
+  WITH_FIXED_SLIPPAGE,
+  WITH_MAX_WAIT_MS,
+  WITH_REFERRER_ID,
+  WITH_SIGNING_PUBLIC_KEY,
+  WITH_TRADER_ACCOUNT_ID,
+  DESCRIBE_AMOUNT,
   DEFAULT_SLIPPAGE,
-} from "./lib/types/dex_aggregator_quote_params_type.ts";
+} from "./lib/quote_params_type.ts";
 export type {
-  Route,
-  RouteAmount,
-  ExecutionInstruction,
-  NearTransactionInstruction,
-  NearTransactionAction,
-  FunctionCallAction,
-} from "./lib/types/dex_aggregator_route_response_type.ts";
+  ROUTE,
+  ROUTE_AMOUNT,
+  EXECUTION_INSTRUCTION,
+  NEAR_TRANSACTION_INSTRUCTION,
+  NEAR_TRANSACTION_ACTION,
+  FUNCTION_CALL_ACTION,
+} from "./lib/route_response_type.ts";
 export {
-  bestAmount,
-  amountMode,
-  txCount,
-  actionCount,
-  isDirectlyExecutable,
-  shouldContinueOnFailure,
-  hasFeeLegs,
-} from "./lib/types/dex_aggregator_route_response_type.ts";
+  BEST_AMOUNT,
+  AMOUNT_MODE,
+  TX_COUNT,
+  ACTION_COUNT,
+  IS_DIRECTLY_EXECUTABLE,
+  SHOULD_CONTINUE_ON_FAILURE,
+  HAS_FEE_LEGS,
+} from "./lib/route_response_type.ts";
 // functions
 export {
-  executeRouteSequential,
-  executeRouteBatched,
-  type BatchWallet,
-  type ActionLike,
-  type ExecuteRouteOptions,
-} from "./fun/dex_aggregator/dex_aggregator_execute_route_fun.ts";
+  EXECUTE_ROUTE_SEQUENTIAL,
+  EXECUTE_ROUTE_BATCHED,
+  type BATCH_WALLET,
+  type ACTION_LIKE,
+  type EXECUTE_ROUTE_OPTIONS,
+} from "./fun/execute_route.ts";
 export {
-  getRoutes,
-  getBestRoute,
-} from "./fun/dex_aggregator/dex_aggregator_get_routes_fun_json.ts";
+  GET_ROUTES,
+  GET_BEST_ROUTE,
+} from "./fun/get_routes.ts";
 // =================================================

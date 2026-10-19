@@ -1,5 +1,5 @@
 // =================================================
-// dex_aggregator_route_response_type
+// route_response_type
 // One quoted swap route and its execution instructions, exactly
 // as the intear dex-aggregator returns them in `GET /route`.
 //
@@ -15,7 +15,7 @@
 // =================================================
 // Decode any JSON value into a `bigint` (number-or-string on the wire).
 // Used for `gas` (raw gas units) and other u64 / yoctoNEAR fields.
-function valueToBigInt(value: unknown): bigint {
+function value_to_bigint(value: unknown): bigint {
   if (typeof value === "number") {
     if (!Number.isFinite(value)) {
       throw new Error(`invalid bigint number: ${value}`);
@@ -38,7 +38,7 @@ function valueToBigInt(value: unknown): bigint {
 // `amount_out` for `amount_in` requests (most common), `amount_in`
 // for `amount_out` requests. Both are decimal strings in the
 // token's smallest unit.
-export interface RouteAmount {
+export interface ROUTE_AMOUNT {
   /** Quoted output amount (present for `amount_in` requests). */
   amount_out?: string;
   /** Required input amount (present for `amount_out` requests). */
@@ -46,7 +46,7 @@ export interface RouteAmount {
 }
 // =================================================
 /** A `FunctionCall` action inside a `NearTransaction` instruction. */
-export interface FunctionCallAction {
+export interface FUNCTION_CALL_ACTION {
   /** Contract method to call (e.g. `ft_transfer_call`). */
   method_name: string;
   /** Base64-encoded call args. */
@@ -59,15 +59,15 @@ export interface FunctionCallAction {
 /** One action inside a `NearTransaction` instruction. The router
  *  only ever emits `FunctionCall` today; the union keeps us forward
  *  compatible if transfer / deposit variants appear later. */
-export type NearTransactionAction = { FunctionCall: FunctionCallAction };
+export type NEAR_TRANSACTION_ACTION = { FunctionCall: FUNCTION_CALL_ACTION };
 // =================================================
 /** A NEAR transaction execution instruction: send one standard NEAR
  *  transaction with these actions, in order. */
-export interface NearTransactionInstruction {
+export interface NEAR_TRANSACTION_INSTRUCTION {
   /** Contract receiving the transaction. */
   receiver_id: string;
   /** Actions to include in the single transaction, in order. */
-  actions: NearTransactionAction[];
+  actions: NEAR_TRANSACTION_ACTION[];
   /** True for referral-fee legs — the router calls these `is_fee_transaction`.
    *  After a route's swap transactions land, call `POST /route/outcome`
    *  with their hashes + `fee_amount` to find out whether the fee
@@ -78,18 +78,20 @@ export interface NearTransactionInstruction {
 }
 // =================================================
 /** One step of a quoted route. Process instructions sequentially. */
-export type ExecutionInstruction = { NearTransaction: NearTransactionInstruction };
+export type EXECUTION_INSTRUCTION = {
+  NearTransaction: NEAR_TRANSACTION_INSTRUCTION;
+};
 // =================================================
 /** One quoted swap route: one element of the array returned by
  *  `GET /route`. When no DEX can serve a pair the router answers
  *  `200` with an empty array (`[]`) — maps to `RouteNotFound` in
- *  `getBestRoute`.
+ *  `GET_BEST_ROUTE`.
  *
  *  Field names reflect the current upstream schema (dex-aggregator
  *  `swap-router/src/types.rs`). The legacy `has_slippage` and
  *  `deadline` fields are absent in newer responses, so we make them
  *  optional and let callers infer "AMM" by absence of `fee_amount`. */
-export interface Route {
+export interface ROUTE {
   /** Route expiry (often absent on the wire; deprecated upstream). */
   deadline?: number | string | null;
   /** Legacy field: was `true` for AMM quotes (slippage applies),
@@ -98,16 +100,16 @@ export interface Route {
    *  depended on the field still see a sensible default. */
   has_slippage?: boolean;
   /** Expected swap amount. */
-  estimated_amount: RouteAmount;
+  estimated_amount: ROUTE_AMOUNT;
   /** Minimum guaranteed amount after slippage. */
-  worst_case_amount: RouteAmount;
+  worst_case_amount: ROUTE_AMOUNT;
   /** Which DEX serves this route. Router emits one of:
    *  "Rhea", "Aidols", "Wrap", "RheaDcl", "MetaPool", "Linear",
    *  "XRhea", "RNear", "Plach" (the un-served entries are kept for
    *  backwards-compatible parsing). */
   dex_id: string;
   /** Instructions to execute in order. */
-  execution_instructions: ExecutionInstruction[];
+  execution_instructions: EXECUTION_INSTRUCTION[];
   /** Output token of this route. May differ from the requested
    *  `token_out` when the exact output location is not known yet —
    *  request a second `Wrap`-only quote from here to the desired
@@ -127,32 +129,22 @@ export interface Route {
    *  for NEAR), to pass to `POST /route/outcome`. */
   fee_amount?: string;
   /** Quote discount (referral fee savings) signed into this route. */
-  discount?: RouteAmount;
-}
-// =================================================
-/** Internal helpers used by the rs tool-box's typed `ROUTE_TYPE`.
- *  Mirror the rs tool-box's `tx_count()`, `action_count()` and
- *  `is_directly_executable()` so the bin's table matches. */
-export interface RouteDerived {
-  txCount(): number;
-  actionCount(): number;
-  isDirectlyExecutable(): boolean;
+  discount?: ROUTE_AMOUNT;
 }
 // =================================================
 /** True when an instruction is a referral-fee leg (router name) or
  *  carries the older "continue on failure" flag. The rs tool-box
  *  used `continue_if_failed`, the router emits `is_fee_transaction`;
  *  both indicate the same thing. */
-export function shouldContinueOnFailure(
-  tx: NearTransactionInstruction,
+export function SHOULD_CONTINUE_ON_FAILURE(
+  tx: NEAR_TRANSACTION_INSTRUCTION,
 ): boolean {
   return tx.continue_if_failed === true || tx.is_fee_transaction === true;
 }
-// =================================================
 /** True when this route has any fee (referral-payout) legs that
  *  need to be sent only after `POST /route/outcome` reports
  *  `charge_fee: true`. */
-export function hasFeeLegs(route: Route): boolean {
+export function HAS_FEE_LEGS(route: ROUTE): boolean {
   return route.execution_instructions.some(
     (i) =>
       "NearTransaction" in i &&
@@ -163,9 +155,9 @@ export function hasFeeLegs(route: Route): boolean {
 // =================================================
 // Lightweight runtime coercion for fields the bin uses.
 // Keep this cheap and sync — Zod would be heavier than we need here.
-function valueToNumberOrNull(value: unknown): number | null {
+function value_to_number_or_null(value: unknown): number | null {
   if (value === undefined || value === null) return null;
-  const big = valueToBigInt(value);
+  const big = value_to_bigint(value);
   const max = BigInt(Number.MAX_SAFE_INTEGER);
   if (big > max) {
     throw new Error(
@@ -175,51 +167,51 @@ function valueToNumberOrNull(value: unknown): number | null {
   return Number(big);
 }
 // =================================================
-/** Coerce one decoded `Route` from the raw router JSON shape into
- *  the typed `Route` interface. Strict on critical fields (`dex_id`,
+/** Coerce one decoded `ROUTE` from the raw router JSON shape into
+ *  the typed `ROUTE` interface. Strict on critical fields (`dex_id`,
  *  `token_output`, execution instructions) and lenient on optionals. */
-export function coerceRoute(raw: Record<string, unknown>): Route {
+export function COERCE_ROUTE(raw: Record<string, unknown>): ROUTE {
   if (!raw || typeof raw !== "object") {
     throw new Error("route: expected an object");
   }
-  const instructionsRaw = raw["execution_instructions"];
-  if (!Array.isArray(instructionsRaw)) {
+  const instructions_raw = raw["execution_instructions"];
+  if (!Array.isArray(instructions_raw)) {
     throw new Error("route.execution_instructions: expected an array");
   }
-  const instructions: ExecutionInstruction[] = instructionsRaw.map(
+  const instructions: EXECUTION_INSTRUCTION[] = instructions_raw.map(
     (entry, i) => {
       if (!entry || typeof entry !== "object") {
         throw new Error(
           `route.execution_instructions[${i}]: expected an object`,
         );
       }
-      const txEntry = (entry as Record<string, unknown>)["NearTransaction"];
-      if (!txEntry || typeof txEntry !== "object") {
+      const tx_entry = (entry as Record<string, unknown>)["NearTransaction"];
+      if (!tx_entry || typeof tx_entry !== "object") {
         throw new Error(
           `route.execution_instructions[${i}]: only NearTransaction is supported today`,
         );
       }
-      const tx = txEntry as Record<string, unknown>;
-      const actionsRaw = tx["actions"];
-      if (!Array.isArray(actionsRaw)) {
+      const tx = tx_entry as Record<string, unknown>;
+      const actions_raw = tx["actions"];
+      if (!Array.isArray(actions_raw)) {
         throw new Error(
           `route.execution_instructions[${i}].actions: expected an array`,
         );
       }
-      const actions: NearTransactionAction[] = actionsRaw.map(
+      const actions: NEAR_TRANSACTION_ACTION[] = actions_raw.map(
         (act, j) => {
           if (!act || typeof act !== "object") {
             throw new Error(
               `route.execution_instructions[${i}].actions[${j}]: expected an object`,
             );
           }
-          const fcEntry = (act as Record<string, unknown>)["FunctionCall"];
-          if (!fcEntry || typeof fcEntry !== "object") {
+          const fc_entry = (act as Record<string, unknown>)["FunctionCall"];
+          if (!fc_entry || typeof fc_entry !== "object") {
             throw new Error(
               `route.execution_instructions[${i}].actions[${j}]: only FunctionCall is supported today`,
             );
           }
-          const fc = fcEntry as Record<string, unknown>;
+          const fc = fc_entry as Record<string, unknown>;
           if (typeof fc["method_name"] !== "string") {
             throw new Error(
               `route.execution_instructions[${i}].actions[${j}].method_name: expected a string`,
@@ -240,7 +232,7 @@ export function coerceRoute(raw: Record<string, unknown>): Route {
           };
         },
       );
-      const continueIfFailed =
+      const continue_if_failed =
         (typeof tx["continue_if_failed"] === "boolean" &&
           (tx["continue_if_failed"] as boolean)) ||
         (typeof tx["is_fee_transaction"] === "boolean" &&
@@ -255,8 +247,8 @@ export function coerceRoute(raw: Record<string, unknown>): Route {
         NearTransaction: {
           receiver_id: tx["receiver_id"] as string,
           actions,
-          continue_if_failed: continueIfFailed,
-          is_fee_transaction: continueIfFailed,
+          continue_if_failed: continue_if_failed,
+          is_fee_transaction: continue_if_failed,
         },
       };
     },
@@ -268,12 +260,12 @@ export function coerceRoute(raw: Record<string, unknown>): Route {
     throw new Error("route.token_output: expected a string");
   }
   return {
-    deadline: valueToNumberOrNull(raw["deadline"]),
+    deadline: value_to_number_or_null(raw["deadline"]),
     has_slippage: typeof raw["has_slippage"] === "boolean"
       ? (raw["has_slippage"] as boolean)
       : undefined,
-    estimated_amount: (raw["estimated_amount"] ?? {}) as RouteAmount,
-    worst_case_amount: (raw["worst_case_amount"] ?? {}) as RouteAmount,
+    estimated_amount: (raw["estimated_amount"] ?? {}) as ROUTE_AMOUNT,
+    worst_case_amount: (raw["worst_case_amount"] ?? {}) as ROUTE_AMOUNT,
     dex_id: raw["dex_id"] as string,
     execution_instructions: instructions,
     token_output: raw["token_output"] as string,
@@ -300,28 +292,28 @@ export function coerceRoute(raw: Record<string, unknown>): Route {
       typeof raw["fee_amount"] === "string"
         ? (raw["fee_amount"] as string)
         : undefined,
-    discount: raw["discount"] as RouteAmount | undefined,
+    discount: raw["discount"] as ROUTE_AMOUNT | undefined,
   };
 }
 // =================================================
 // pure helpers (mirror Rust tool-box methods on the type)
-export function txCount(route: Route): number {
+export function TX_COUNT(route: ROUTE): number {
   return route.execution_instructions.length;
 }
-export function actionCount(route: Route): number {
+export function ACTION_COUNT(route: ROUTE): number {
   return route.execution_instructions.reduce(
     (n, i) =>
       n + ("NearTransaction" in i ? i.NearTransaction.actions.length : 0),
     0,
   );
 }
-export function isDirectlyExecutable(route: Route): boolean {
+export function IS_DIRECTLY_EXECUTABLE(route: ROUTE): boolean {
   return route.execution_instructions.every((i) => "NearTransaction" in i);
 }
-export function bestAmount(amount: RouteAmount): string | undefined {
+export function BEST_AMOUNT(amount: ROUTE_AMOUNT): string | undefined {
   return amount.amount_out ?? amount.amount_in;
 }
-export function amountMode(amount: RouteAmount): "out" | "in" {
+export function AMOUNT_MODE(amount: ROUTE_AMOUNT): "out" | "in" {
   return amount.amount_out !== undefined ? "out" : "in";
 }
 // =================================================

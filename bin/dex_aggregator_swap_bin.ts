@@ -30,21 +30,21 @@
 import { Near } from "near-kit";
 import type { PrivateKey } from "near-kit";
 import {
-  amountIn,
-  DexAggregatorClient,
-  DexAggregatorClientError,
-  executeRouteSequential,
-  formatDexAggregatorError,
-  getRoutes,
-  printRoutesTable,
-  printRoutePreview,
-  withDexes,
-  withFixedSlippage,
-  withMaxWaitMs,
-  withReferrerId,
-  withSigningPublicKey,
-  withTraderAccountId,
-  isDirectlyExecutable,
+  AMOUNT_IN,
+  DEX_AGGREGATOR_CLIENT,
+  DEX_AGGREGATOR_CLIENT_ERROR,
+  EXECUTE_ROUTE_SEQUENTIAL,
+  FORMAT_DEX_AGGREGATOR_ERROR,
+  GET_ROUTES,
+  PRINT_ROUTES_TABLE,
+  PRINT_ROUTE_PREVIEW,
+  WITH_DEXES,
+  WITH_FIXED_SLIPPAGE,
+  WITH_MAX_WAIT_MS,
+  WITH_REFERRER_ID,
+  WITH_SIGNING_PUBLIC_KEY,
+  WITH_TRADER_ACCOUNT_ID,
+  IS_DIRECTLY_EXECUTABLE,
 } from "../src/index.ts";
 // =================================================
 function envOr(key: string, fallback: string): string {
@@ -76,7 +76,7 @@ async function main(): Promise<void> {
     "usdt.tether-token.near",
   );
 
-  let params = amountIn(tokenIn, tokenOut, amountIn_);
+  let params = AMOUNT_IN(tokenIn, tokenOut, amountIn_);
 
   const slippage = envOpt(["DEX_AGG_SLIPPAGE", "DEX_AGGREGATOR_SLIPPAGE"]);
   if (slippage !== undefined) {
@@ -84,7 +84,7 @@ async function main(): Promise<void> {
     if (!Number.isFinite(v)) {
       throw new Error(`DEX_AGG_SLIPPAGE is not a decimal: ${slippage}`);
     }
-    params = withFixedSlippage(params, v);
+    params = WITH_FIXED_SLIPPAGE(params, v);
   }
   const maxWait = envOpt([
     "DEX_AGG_MAX_WAIT_MS",
@@ -95,25 +95,25 @@ async function main(): Promise<void> {
     if (!Number.isFinite(v)) {
       throw new Error(`DEX_AGG_MAX_WAIT_MS is not an integer: ${maxWait}`);
     }
-    params = withMaxWaitMs(params, v);
+    params = WITH_MAX_WAIT_MS(params, v);
   }
   const dexes = envOpt(["DEX_AGG_DEXES", "DEX_AGGREGATOR_DEXES"]);
-  if (dexes !== undefined) params = withDexes(params, dexes);
+  if (dexes !== undefined) params = WITH_DEXES(params, dexes);
   const referrer = envOpt(["DEX_AGG_REFERRER_ID", "DEX_AGGREGATOR_REFERRER_ID"]);
-  if (referrer !== undefined) params = withReferrerId(params, referrer);
+  if (referrer !== undefined) params = WITH_REFERRER_ID(params, referrer);
   // Default the trader to the signer so storage-deposit legs are
   // included when you go on to execute.
   const trader = envOpt(["DEX_AGG_TRADER_ACCOUNT_ID"]) ??
     envOpt(["NEAR_ACCOUNT_ID"]);
-  if (trader !== undefined) params = withTraderAccountId(params, trader);
+  if (trader !== undefined) params = WITH_TRADER_ACCOUNT_ID(params, trader);
   const pubKey = envOpt(["DEX_AGG_SIGNING_PUBLIC_KEY"]);
-  if (pubKey !== undefined) params = withSigningPublicKey(params, pubKey);
+  if (pubKey !== undefined) params = WITH_SIGNING_PUBLIC_KEY(params, pubKey);
 
-  const client = DexAggregatorClient.fromEnv();
+  const client = DEX_AGGREGATOR_CLIENT.FROM_ENV();
   console.log(
-    `Quoting ${amountIn_} ${tokenIn} -> ${tokenOut} via ${client.baseUrlValue()} ...`,
+    `Quoting ${amountIn_} ${tokenIn} -> ${tokenOut} via ${client.BASE_URL_VALUE()} ...`,
   );
-  const routes = await getRoutes(client, params);
+  const routes = await GET_ROUTES(client, params);
   if (routes.length === 0) {
     console.error(`No routes found for ${amountIn_} ${tokenIn} -> ${tokenOut}.`);
     console.error(
@@ -128,7 +128,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   console.log(`Found ${routes.length} route(s) (best first):`);
-  printRoutesTable(routes);
+  PRINT_ROUTES_TABLE(routes);
 
   process.stdout.write("Select route [0]: ");
   const input = (await new Promise<string>((resolve) => {
@@ -144,9 +144,9 @@ async function main(): Promise<void> {
   }
   const route = routes[index]!;
   console.log();
-  printRoutePreview(route);
+  PRINT_ROUTE_PREVIEW(route);
 
-  if (!isDirectlyExecutable(route)) {
+  if (!IS_DIRECTLY_EXECUTABLE(route)) {
     console.error();
     console.error(
       `Route ${index} (dex ${route.dex_id}) needs manual handling (non-NearTransaction leg).`,
@@ -187,7 +187,7 @@ async function main(): Promise<void> {
   console.log();
   console.log(`Executing route ${index} via ${route.dex_id} ...`);
   try {
-    const outcomes = await executeRouteSequential(near, route, {
+    const outcomes = await EXECUTE_ROUTE_SEQUENTIAL(near, route, {
       verbose: true,
     });
     for (let i = 0; i < outcomes.length; i++) {
@@ -202,8 +202,8 @@ async function main(): Promise<void> {
       console.log(`          https://nearblocks.io/txns/${hash}`);
     }
   } catch (err) {
-    if (err instanceof DexAggregatorClientError) {
-      console.error(formatDexAggregatorError(err.error));
+    if (err instanceof DEX_AGGREGATOR_CLIENT_ERROR) {
+      console.error(FORMAT_DEX_AGGREGATOR_ERROR(err.error));
     } else {
       console.error(err);
     }
@@ -212,8 +212,8 @@ async function main(): Promise<void> {
 }
 // =================================================
 main().catch((err) => {
-  if (err instanceof DexAggregatorClientError) {
-    console.error(formatDexAggregatorError(err.error));
+  if (err instanceof DEX_AGGREGATOR_CLIENT_ERROR) {
+    console.error(FORMAT_DEX_AGGREGATOR_ERROR(err.error));
   } else {
     console.error(err);
   }

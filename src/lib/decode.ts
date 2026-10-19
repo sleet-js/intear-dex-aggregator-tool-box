@@ -1,5 +1,5 @@
 // =================================================
-// dex_aggregator_decode
+// decode
 // Convert base64 / gas / deposit values from the router's wire format
 // into the shapes near-kit expects on `Action.functionCall`.
 //
@@ -10,7 +10,7 @@
 // decimal string, so we pre-process once here and call sites stay
 // tidy.
 // =================================================
-import { DexAggregatorClientError } from "./dex_aggregator_client.ts";
+import { DEX_AGGREGATOR_CLIENT_ERROR } from "./client.ts";
 // =================================================
 /** Decode the router's base64 `args` payload into raw bytes.
  *
@@ -20,17 +20,17 @@ import { DexAggregatorClientError } from "./dex_aggregator_client.ts";
  *  this file was wrong for padded inputs because the `=` char was
  *  not in its 64-char lookup, so the final byte became `0xff`
  *  instead of the real value). `context` is included in errors. */
-export function decodeInstructionArgs(
-  base64Args: string,
+export function DECODE_INSTRUCTION_ARGS(
+  base64_args: string,
   context: string,
 ): Uint8Array {
   try {
-    const text = atob(base64Args);
+    const text = atob(base64_args);
     const bytes = new Uint8Array(text.length);
     for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i);
     return bytes;
   } catch (cause) {
-    throw new DexAggregatorClientError({
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
       kind: "base64_decode",
       context,
       message: String((cause as Error)?.message ?? cause),
@@ -56,11 +56,11 @@ export function decodeInstructionArgs(
  *
  *  `context` is included in errors to identify the failing field
  *  (receiver + method). */
-export function decodeInstructionArgsAsJson(
-  base64Args: string,
+export function DECODE_INSTRUCTION_ARGS_AS_JSON(
+  base64_args: string,
   context: string,
 ): Record<string, unknown> | string | Uint8Array {
-  const bytes = decodeInstructionArgs(base64Args, context);
+  const bytes = DECODE_INSTRUCTION_ARGS(base64_args, context);
   let text: string | null = null;
   try {
     text = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
@@ -90,10 +90,10 @@ export function decodeInstructionArgsAsJson(
 /** Convert a router `gas` value (raw u64, number-or-string on the
  *  wire) into a string accepted by `parseGas`. near-kit accepts raw
  *  gas numbers as a string via `parseGas`, e.g. `"5000000000000"`. */
-export function gasFromRoute(gas: number | string): string {
+export function GAS_FROM_ROUTE(gas: number | string): string {
   if (typeof gas === "number") {
     if (!Number.isFinite(gas)) {
-      throw new DexAggregatorClientError({
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "invalid_number",
         context: "gas",
         value: String(gas),
@@ -104,7 +104,7 @@ export function gasFromRoute(gas: number | string): string {
   }
   const trimmed = gas.trim();
   if (!/^\d+$/.test(trimmed)) {
-    throw new DexAggregatorClientError({
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
       kind: "invalid_number",
       context: "gas",
       value: gas,
@@ -117,11 +117,11 @@ export function gasFromRoute(gas: number | string): string {
 /** Parse a router `deposit` (yoctoNEAR decimal string or number)
  *  into a `bigint` of yoctoNEAR. `near-kit`'s `parseAmount` accepts
  *  bigint for raw yocto. */
-export function depositFromRoute(deposit: string | number): bigint {
+export function DEPOSIT_FROM_ROUTE(deposit: string | number): bigint {
   let raw: string;
   if (typeof deposit === "number") {
     if (!Number.isFinite(deposit)) {
-      throw new DexAggregatorClientError({
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "invalid_number",
         context: "deposit",
         value: String(deposit),
@@ -133,7 +133,7 @@ export function depositFromRoute(deposit: string | number): bigint {
     raw = deposit.trim();
   }
   if (!/^\d+$/.test(raw)) {
-    throw new DexAggregatorClientError({
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
       kind: "invalid_number",
       context: "deposit (expected yoctoNEAR decimal string)",
       value: String(deposit),

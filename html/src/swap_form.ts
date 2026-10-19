@@ -1,17 +1,17 @@
 import {
-  DexAggregatorClient,
-  DexAggregatorClientError,
-  amountIn,
-  executeRouteBatched,
-  formatDexAggregatorError,
-  getRoutes,
-  withReferrerId,
-  withTraderAccountId,
-  type Route,
+  DEX_AGGREGATOR_CLIENT,
+  DEX_AGGREGATOR_CLIENT_ERROR,
+  AMOUNT_IN,
+  EXECUTE_ROUTE_BATCHED,
+  FORMAT_DEX_AGGREGATOR_ERROR,
+  GET_ROUTES,
+  WITH_REFERRER_ID,
+  WITH_TRADER_ACCOUNT_ID,
+  type ROUTE,
 } from "../../src/index.ts";
 import { near_connect_client } from "@near-kit-tool-box/web";
 // ==========================================
-// Swap form: quote via DexAggregatorClient, render every route
+// Swap form: quote via DEX_AGGREGATOR_CLIENT, render every route
 // with full details, then let the user execute a route with the
 // connected wallet.
 //
@@ -19,7 +19,7 @@ import { near_connect_client } from "@near-kit-tool-box/web";
 // the same pattern as the svelte setup-near-kit demo
 // (`@near-kit-tool-box/web`).
 // ==========================================
-const client = new DexAggregatorClient();
+const client = new DEX_AGGREGATOR_CLIENT();
 
 function $(id: string): string {
   const el = document.getElementById(id) as HTMLInputElement | null;
@@ -76,14 +76,14 @@ async function readParams() {
       `amount_in must be a non-negative integer (raw units), got "${amountInRaw}"`,
     );
   }
-  let params = amountIn(tokenIn, tokenOut, amountInRaw);
-  if (referrer) params = withReferrerId(params, referrer);
+  let params = AMOUNT_IN(tokenIn, tokenOut, amountInRaw);
+  if (referrer) params = WITH_REFERRER_ID(params, referrer);
   const acct = await getConnectedAccountId();
-  if (acct) params = withTraderAccountId(params, acct);
+  if (acct) params = WITH_TRADER_ACCOUNT_ID(params, acct);
   return params;
 }
 // =================================================
-function renderRouteCard(route: Route, index: number): HTMLElement {
+function renderRouteCard(route: ROUTE, index: number): HTMLElement {
   const card = el("div", { cls: "route-card" });
   card.appendChild(el("h3", { text: `#${index} — ${route.dex_id}` }));
   card.appendChild(el("div", {
@@ -127,7 +127,7 @@ function renderRouteCard(route: Route, index: number): HTMLElement {
   return card;
 }
 // =================================================
-function renderRoutes(routes: Route[]): void {
+function renderRoutes(routes: ROUTE[]): void {
   const out = document.getElementById("ROUTES_OUTPUT");
   if (!out) return;
   out.replaceChildren();
@@ -143,8 +143,8 @@ function renderError(err: unknown): void {
   const out = document.getElementById("ROUTES_OUTPUT");
   if (!out) return;
   const msg =
-    err instanceof DexAggregatorClientError
-      ? formatDexAggregatorError(err.error)
+    err instanceof DEX_AGGREGATOR_CLIENT_ERROR
+      ? FORMAT_DEX_AGGREGATOR_ERROR(err.error)
       : err instanceof Error
         ? err.message
         : String(err);
@@ -158,12 +158,12 @@ function renderError(err: unknown): void {
   }
 }
 // =================================================
-async function executeOne(route: Route, index: number): Promise<void> {
+async function executeOne(route: ROUTE, index: number): Promise<void> {
   // Read the connected account from the mirror kept in auth.ts
   // (window.__accountId). Click handlers aren't async-survivable for
   // "reconnect and try again", so we trust the auth.ts state here.
-  const signerId = window.__accountId;
-  if (!signerId) {
+  const signer_id = window.__accountId;
+  if (!signer_id) {
     alert("Please LOGIN first.");
     return;
   }
@@ -182,13 +182,13 @@ async function executeOne(route: Route, index: number): Promise<void> {
     // `signAndSendTransactions` (plural) method, which all
     // `@hot-labs/near-connect` wallets implement on `NearWalletBase`.
     //
-    // `executeRouteBatched` accepts that wallet, performs the
+    // `EXECUTE_ROUTE_BATCHED` accepts that wallet, performs the
     // runtime feature check, and dispatches one popup containing all
     // route transactions (storage_deposit, register_assets,
     // near_withdraw, deposit_near, etc.).
     const wallet = await near_connect_client().wallet();
-    const outcomes = await executeRouteBatched(wallet, route, {
-      signerId,
+    const outcomes = await EXECUTE_ROUTE_BATCHED(wallet, route, {
+      signer_id,
       verbose: true,
     });
     const ok = outcomes.every((o) =>
@@ -209,8 +209,8 @@ async function executeOne(route: Route, index: number): Promise<void> {
       });
     }
   } catch (caught: unknown) {
-    if (caught instanceof DexAggregatorClientError) {
-      alert(formatDexAggregatorError(caught.error));
+    if (caught instanceof DEX_AGGREGATOR_CLIENT_ERROR) {
+      alert(FORMAT_DEX_AGGREGATOR_ERROR(caught.error));
     } else if (caught instanceof Error) {
       alert(caught.message);
     } else {
@@ -229,7 +229,7 @@ async function onGetRoutes(): Promise<void> {
   if (out) out.replaceChildren(el("p", { text: "loading..." }));
   try {
     const params = await readParams();
-    const routes = await getRoutes(client, params);
+    const routes = await GET_ROUTES(client, params);
     if (routes.length === 0) {
       if (out) {
         out.replaceChildren(el("div", {

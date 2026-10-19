@@ -1,44 +1,43 @@
 // =================================================
-// dex_aggregator_client
+// client
 // Reusable client for the intear dex-aggregator `GET /route` API.
 //
 // Configure once (`referrer_id`, default `dexes`, wait budget, API
-// key); every trade then only passes a `QuoteParams` with the fields
+// key); every trade then only passes a `QUOTE_PARAMS` with the fields
 // that differ per swap.
 //
 // The client holds no signer — signing stays with your near-kit `Near`
 // instance (built directly or via `near_kit_client` / `near_kit_env`
 // from near-kit-tool-box-ts), which you hand to
-// `executeRouteSequential` separately. This keeps quoting (read-only,
-// no credentials) cleanly apart from executing (needs a mainnet
+// `EXECUTE_ROUTE_SEQUENTIAL` separately. This keeps quoting (read-
+// only, no credentials) cleanly apart from executing (needs a mainnet
 // signer). For the browser path, hand a wallet from
-// `@hot-labs/near-connect` to `executeRouteBatched` instead.
+// `@hot-labs/near-connect` to `EXECUTE_ROUTE_BATCHED` instead.
 // =================================================
 import {
-  formatDexAggregatorError,
-  type DexAggregatorError,
-} from "../types/dex_aggregator_error_type.ts";
+  FORMAT_DEX_AGGREGATOR_ERROR,
+  type DEX_AGGREGATOR_ERROR,
+} from "./error_type.ts";
 import {
-  describeAmount,
-  type QuoteParams,
-} from "../types/dex_aggregator_quote_params_type.ts";
+  DESCRIBE_AMOUNT,
+  type QUOTE_PARAMS,
+} from "./quote_params_type.ts";
 import {
-  coerceRoute,
-  type Route,
-} from "../types/dex_aggregator_route_response_type.ts";
+  COERCE_ROUTE,
+  type ROUTE,
+} from "./route_response_type.ts";
 // =================================================
 /** A typed error class so it can be `instanceof`-checked and `throw`n
- *  just like a normal error. Always carries a typed `error: DexAggregatorError`
+ *  just like a normal error. Always carries a typed `error: DEX_AGGREGATOR_ERROR`
  *  field for exhaustive matching. */
-export class DexAggregatorClientError extends Error {
-  override readonly name = "DexAggregatorClientError";
-  readonly error: DexAggregatorError;
-  constructor(error: DexAggregatorError) {
-    super(formatDexAggregatorError(error));
+export class DEX_AGGREGATOR_CLIENT_ERROR extends Error {
+  override readonly name = "DEX_AGGREGATOR_CLIENT_ERROR";
+  readonly error: DEX_AGGREGATOR_ERROR;
+  constructor(error: DEX_AGGREGATOR_ERROR) {
+    super(FORMAT_DEX_AGGREGATOR_ERROR(error));
     this.error = error;
   }
 }
-// =================================================
 // =================================================
 /** Default router base url. */
 export const DEX_AGGREGATOR_BASE_URL = "https://router.intear.tech";
@@ -51,46 +50,46 @@ export const DEX_AGGREGATOR_KNOWN_DEXES =
 // =================================================
 /** Reusable client for the intear dex-aggregator `GET /route` API.
  *
- *  Use `with*` builders to set options once, then call `getRoutes`
+ *  Use `WITH_*` builders to set options once, then call `GET_ROUTES`
  *  per trade. The client holds no signer — quoting is read-only.
  *
  *  @example
  *  ```ts
  *  import {
- *    DexAggregatorClient,
- *    amountIn,
+ *    DEX_AGGREGATOR_CLIENT,
+ *    AMOUNT_IN,
  *  } from "intear-dex-aggregator-tool-box";
  *
- *  const client = new DexAggregatorClient().withReferrerId("you.near");
- *  const params = amountIn(
+ *  const client = new DEX_AGGREGATOR_CLIENT().WITH_REFERRER_ID("you.near");
+ *  const params = AMOUNT_IN(
  *    "near",
  *    "usdt.tether-token.near",
  *    "100000000000000000000000",
  *  );
- *  const routes = await client.getRoutes(params);
+ *  const routes = await client.GET_ROUTES(params);
  *  ``` */
-export class DexAggregatorClient {
-  private baseUrl: string;
-  private referrerId?: string;
-  private defaultDexes?: string;
-  private defaultMaxWaitMs: number;
-  private apiKey?: string;
-  private readonly fetchImpl: typeof fetch;
+export class DEX_AGGREGATOR_CLIENT {
+  private base_url: string;
+  private referrer_id?: string;
+  private default_dexes?: string;
+  private default_max_wait_ms: number;
+  private api_key?: string;
+  private readonly fetch_impl: typeof fetch;
   // =================================================
   constructor(
     options: {
-      baseUrl?: string;
+      base_url?: string;
       fetch?: typeof fetch;
     } = {},
   ) {
-    this.baseUrl = (options.baseUrl ?? DEX_AGGREGATOR_BASE_URL).replace(
+    this.base_url = (options.base_url ?? DEX_AGGREGATOR_BASE_URL).replace(
       /\/+$/,
       "",
     );
-    this.defaultMaxWaitMs = DEX_AGGREGATOR_DEFAULT_MAX_WAIT_MS;
-    this.fetchImpl = options.fetch ?? globalThis.fetch;
-    if (!this.fetchImpl) {
-      throw new DexAggregatorClientError({
+    this.default_max_wait_ms = DEX_AGGREGATOR_DEFAULT_MAX_WAIT_MS;
+    this.fetch_impl = options.fetch ?? globalThis.fetch;
+    if (!this.fetch_impl) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "invalid_params",
         message: "no fetch implementation available (pass { fetch } in a Node environment)",
       });
@@ -98,31 +97,31 @@ export class DexAggregatorClient {
   }
   // =================================================
   /** Point at a custom router base url (default `https://router.intear.tech`). */
-  withBaseUrl(baseUrl: string): this {
-    const cleaned = baseUrl.trim().replace(/\/+$/, "");
-    this.baseUrl = cleaned;
+  WITH_BASE_URL(base_url: string): this {
+    const cleaned = base_url.trim().replace(/\/+$/, "");
+    this.base_url = cleaned;
     return this;
   }
   /** Credit this account as referrer on every quote (per-trade
-   *  `QuoteParams.referrerId` still wins when set). */
-  withReferrerId(referrerId: string): this {
-    this.referrerId = referrerId;
+   *  `QUOTE_PARAMS.referrer_id` still wins when set). */
+  WITH_REFERRER_ID(referrer_id: string): this {
+    this.referrer_id = referrer_id;
     return this;
   }
   /** Restrict every quote to a comma-separated DEX allow-list
    *  (e.g. `"Rhea,RheaDcl,Plach"`). `undefined` uses all DEXes. */
-  withDefaultDexes(dexes: string): this {
-    this.defaultDexes = dexes;
+  WITH_DEFAULT_DEXES(dexes: string): this {
+    this.default_dexes = dexes;
     return this;
   }
-  /** Default wait budget (ms) used when a trade sets no `maxWaitMs`. */
-  withMaxWaitMs(maxWaitMs: number): this {
-    this.defaultMaxWaitMs = maxWaitMs;
+  /** Default wait budget (ms) used when a trade sets no `max_wait_ms`. */
+  WITH_MAX_WAIT_MS(max_wait_ms: number): this {
+    this.default_max_wait_ms = max_wait_ms;
     return this;
   }
   /** API key for unlimited usage (sent as `&key=...`). */
-  withApiKey(apiKey: string): this {
-    this.apiKey = apiKey;
+  WITH_API_KEY(api_key: string): this {
+    this.api_key = api_key;
     return this;
   }
   // =================================================
@@ -131,116 +130,116 @@ export class DexAggregatorClient {
    *  `DEX_AGGREGATOR_DEXES`, `DEX_AGGREGATOR_MAX_WAIT_MS`,
    *  `DEX_AGGREGATOR_API_KEY`. The `DEX_AGG_*` short aliases are
    *  accepted too. */
-  static fromEnv(
+  static FROM_ENV(
     env: Record<string, string | undefined> = globalThis.process?.env ?? {},
-  ): DexAggregatorClient {
-    const client = new DexAggregatorClient();
-    const baseUrl = env["DEX_AGGREGATOR_BASE_URL"] ?? env["DEX_AGG_BASE_URL"];
-    if (baseUrl) client.withBaseUrl(baseUrl);
+  ): DEX_AGGREGATOR_CLIENT {
+    const client = new DEX_AGGREGATOR_CLIENT();
+    const base_url = env["DEX_AGGREGATOR_BASE_URL"] ?? env["DEX_AGG_BASE_URL"];
+    if (base_url) client.WITH_BASE_URL(base_url);
     const referrer =
       env["DEX_AGGREGATOR_REFERRER_ID"] ?? env["DEX_AGG_REFERRER_ID"];
-    if (referrer) client.withReferrerId(referrer);
+    if (referrer) client.WITH_REFERRER_ID(referrer);
     const dexes = env["DEX_AGGREGATOR_DEXES"] ?? env["DEX_AGG_DEXES"];
-    if (dexes) client.withDefaultDexes(dexes);
+    if (dexes) client.WITH_DEFAULT_DEXES(dexes);
     const wait = env["DEX_AGGREGATOR_MAX_WAIT_MS"] ?? env["DEX_AGG_MAX_WAIT_MS"];
     if (wait) {
       const ms = Number(wait);
-      if (Number.isFinite(ms)) client.withMaxWaitMs(ms);
+      if (Number.isFinite(ms)) client.WITH_MAX_WAIT_MS(ms);
     }
     const key = env["DEX_AGGREGATOR_API_KEY"] ?? env["DEX_AGG_API_KEY"];
-    if (key) client.withApiKey(key);
+    if (key) client.WITH_API_KEY(key);
     return client;
   }
   // =================================================
   /** Router base url in use. */
-  baseUrlValue(): string {
-    return this.baseUrl;
+  BASE_URL_VALUE(): string {
+    return this.base_url;
   }
   /** Configured default referrer, if any. */
-  referrerIdValue(): string | undefined {
-    return this.referrerId;
+  REFERRER_ID_VALUE(): string | undefined {
+    return this.referrer_id;
   }
   // =================================================
   /** Build the query pairs for one trade, layering per-trade values
    *  over client defaults. Pure helper exposed for callers that want
    *  to reuse the same query logic in their own HTTP layer. */
-  buildQueryPairs(params: QuoteParams): URLSearchParams {
+  BUILD_QUERY_PAIRS(params: QUOTE_PARAMS): URLSearchParams {
     const q = new URLSearchParams();
-    q.set("token_in", params.tokenIn);
-    q.set("token_out", params.tokenOut);
+    q.set("token_in", params.token_in);
+    q.set("token_out", params.token_out);
     if (params.amount.kind === "in") {
-      q.set("amount_in", params.amount.amountIn);
+      q.set("amount_in", params.amount.amount_in);
     } else {
-      q.set("amount_out", params.amount.amountOut);
+      q.set("amount_out", params.amount.amount_out);
     }
-    const maxWait = params.maxWaitMs ?? this.defaultMaxWaitMs;
-    q.set("max_wait_ms", String(maxWait));
+    const max_wait = params.max_wait_ms ?? this.default_max_wait_ms;
+    q.set("max_wait_ms", String(max_wait));
     if (params.slippage.kind === "fixed") {
       q.set("slippage_type", "Fixed");
       q.set("slippage", String(params.slippage.slippage));
     } else {
       q.set("slippage_type", "Auto");
-      q.set("max_slippage", String(params.slippage.maxSlippage));
-      q.set("min_slippage", String(params.slippage.minSlippage));
+      q.set("max_slippage", String(params.slippage.max_slippage));
+      q.set("min_slippage", String(params.slippage.min_slippage));
     }
-    const dexes = params.dexes ?? this.defaultDexes;
+    const dexes = params.dexes ?? this.default_dexes;
     if (dexes && dexes.trim().length > 0) q.set("dexes", dexes);
-    if (params.traderAccountId && params.traderAccountId.trim().length > 0) {
-      q.set("trader_account_id", params.traderAccountId);
+    if (params.trader_account_id && params.trader_account_id.trim().length > 0) {
+      q.set("trader_account_id", params.trader_account_id);
     }
-    if (params.signingPublicKey && params.signingPublicKey.trim().length > 0) {
-      q.set("signing_public_key", params.signingPublicKey);
+    if (params.signing_public_key && params.signing_public_key.trim().length > 0) {
+      q.set("signing_public_key", params.signing_public_key);
     }
-    const referrer = params.referrerId ?? this.referrerId;
+    const referrer = params.referrer_id ?? this.referrer_id;
     if (referrer && referrer.trim().length > 0) {
       q.set("referrer_id", referrer);
     }
-    if (this.apiKey) q.set("key", this.apiKey);
+    if (this.api_key) q.set("key", this.api_key);
     return q;
   }
   // =================================================
   /** Fetch all quoted routes for a trade (best first). Returns an
-   *  empty array when no DEX can serve the pair — use `getBestRoute`
+   *  empty array when no DEX can serve the pair — use `GET_BEST_ROUTE`
    *  when you want that case as a typed `RouteNotFound` error. */
-  async getRoutes(params: QuoteParams): Promise<Route[]> {
-    if (params.tokenIn.trim().length === 0 || params.tokenOut.trim().length === 0) {
-      throw new DexAggregatorClientError({
+  async GET_ROUTES(params: QUOTE_PARAMS): Promise<ROUTE[]> {
+    if (params.token_in.trim().length === 0 || params.token_out.trim().length === 0) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "invalid_params",
         message: "token_in and token_out must both be non-empty",
       });
     }
-    if (params.tokenIn.trim() === params.tokenOut.trim()) {
-      throw new DexAggregatorClientError({
+    if (params.token_in.trim() === params.token_out.trim()) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "invalid_params",
         message: "token_in and token_out must be different",
       });
     }
-    if (params.amount.kind === "in" && params.amount.amountIn.trim() === "0") {
-      throw new DexAggregatorClientError({
+    if (params.amount.kind === "in" && params.amount.amount_in.trim() === "0") {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "invalid_params",
         message: "amount_in must be greater than 0",
       });
     }
-    if (params.amount.kind === "out" && params.amount.amountOut.trim() === "0") {
-      throw new DexAggregatorClientError({
+    if (params.amount.kind === "out" && params.amount.amount_out.trim() === "0") {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "invalid_params",
         message: "amount_out must be greater than 0",
       });
     }
-    const qs = this.buildQueryPairs(params);
-    const url = `${this.baseUrl}/route?${qs.toString()}`;
+    const qs = this.BUILD_QUERY_PAIRS(params);
+    const url = `${this.base_url}/route?${qs.toString()}`;
     // Browser `fetch` enforces strict `this`-binding to the global
     // object. Detached calls fail with `Illegal invocation` on Chrome
     // (Android) and Safari; Node/Bun ignore it, so this slips past
     // typecheck. Reflect.apply preserves the receiver across runtimes.
-    const res = await Reflect.apply(this.fetchImpl, globalThis, [
+    const res = await Reflect.apply(this.fetch_impl, globalThis, [
       url,
       { method: "GET" },
     ]);
     if (!res.ok) {
-      const body = await safeText(res);
+      const body = await safe_text(res);
       const snippet = body.slice(0, 300);
-      throw new DexAggregatorClientError({
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "http",
         message: `router answered ${res.status} ${res.statusText}: ${snippet}`,
       });
@@ -249,26 +248,26 @@ export class DexAggregatorClient {
     try {
       raw = await res.json();
     } catch (cause) {
-      throw new DexAggregatorClientError({
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "parse",
         message: `response was not JSON: ${(cause as Error)?.message ?? cause}`,
       });
     }
     if (!Array.isArray(raw)) {
-      throw new DexAggregatorClientError({
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "parse",
         message: `expected a JSON array of routes, got ${typeof raw}`,
       });
     }
-    const routes: Route[] = [];
+    const routes: ROUTE[] = [];
     for (const entry of raw) {
       if (!entry || typeof entry !== "object") {
-        throw new DexAggregatorClientError({
+        throw new DEX_AGGREGATOR_CLIENT_ERROR({
           kind: "parse",
           message: "each route must be an object",
         });
       }
-      routes.push(coerceRoute(entry as Record<string, unknown>));
+      routes.push(COERCE_ROUTE(entry as Record<string, unknown>));
     }
     return routes;
   }
@@ -276,14 +275,14 @@ export class DexAggregatorClient {
   /** Fetch the single best route for a trade. Maps the router's empty
    *  array (`[]`) to a typed `RouteNotFound` error so callers can
    *  distinguish "unknown / unserved pair" from transport failures. */
-  async getBestRoute(params: QuoteParams): Promise<Route> {
-    const routes = await this.getRoutes(params);
+  async GET_BEST_ROUTE(params: QUOTE_PARAMS): Promise<ROUTE> {
+    const routes = await this.GET_ROUTES(params);
     if (routes.length === 0) {
-      throw new DexAggregatorClientError({
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "route_not_found",
-        tokenIn: params.tokenIn,
-        tokenOut: params.tokenOut,
-        amountDesc: describeAmount(params.amount),
+        token_in: params.token_in,
+        token_out: params.token_out,
+        amount_desc: DESCRIBE_AMOUNT(params.amount),
         hint:
           "router returned []. Check both token ids (testnet tokens are unsupported — the router is mainnet only), try amount_in mode, a smaller amount, or more dexes.",
       });
@@ -292,7 +291,7 @@ export class DexAggregatorClient {
   }
 }
 // =================================================
-async function safeText(res: Response): Promise<string> {
+async function safe_text(res: Response): Promise<string> {
   try {
     return await res.text();
   } catch {

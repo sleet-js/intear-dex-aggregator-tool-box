@@ -1,5 +1,5 @@
 // =================================================
-// dex_aggregator_error_type
+// error_type
 // Every failure mode of this toolbox in one typed union.
 //
 // The most common one to match on is `route_not_found`: the router
@@ -8,50 +8,50 @@
 // It is deliberately distinct from transport / parse errors so
 // callers can e.g. fall back to another pair instead of retrying.
 //
-// The thrown runtime class (`DexAggregatorClientError`) is defined
-// in `dex_aggregator_client.ts` because it has to live where the
-// runtime errors are constructed.
+// The thrown runtime class (`DEX_AGGREGATOR_CLIENT_ERROR`) is defined
+// in `client.ts` because it has to live where the runtime errors are
+// constructed.
 // =================================================
 /** No DEX returned a route for this pair + amount. Check the token
  *  ids (testnet tokens are unsupported — the router is mainnet only),
  *  try a smaller amount, `amount_in` mode, or more `dexes`. */
-export interface DexAggregatorRouteNotFoundError {
+export interface DEX_AGGREGATOR_ROUTE_NOT_FOUND_ERROR {
   kind: "route_not_found";
-  tokenIn: string;
-  tokenOut: string;
-  amountDesc: string;
+  token_in: string;
+  token_out: string;
+  amount_desc: string;
   hint: string;
 }
 /** Quote parameters were inconsistent (e.g. empty token id). */
-export interface DexAggregatorInvalidParamsError {
+export interface DEX_AGGREGATOR_INVALID_PARAMS_ERROR {
   kind: "invalid_params";
   message: string;
 }
 /** HTTP transport failure or non-2xx router status. */
-export interface DexAggregatorHttpError {
+export interface DEX_AGGREGATOR_HTTP_ERROR {
   kind: "http";
   message: string;
 }
 /** Router answered with a body that is not a route array. */
-export interface DexAggregatorParseError {
+export interface DEX_AGGREGATOR_PARSE_ERROR {
   kind: "parse";
   message: string;
 }
 /** A base64 `args` payload in an instruction did not decode. */
-export interface DexAggregatorBase64DecodeError {
+export interface DEX_AGGREGATOR_BASE64_DECODE_ERROR {
   kind: "base64_decode";
   context: string;
   message: string;
 }
 /** A numeric field (`deposit`, ...) did not parse. */
-export interface DexAggregatorInvalidNumberError {
+export interface DEX_AGGREGATOR_INVALID_NUMBER_ERROR {
   kind: "invalid_number";
   context: string;
   value: string;
   message: string;
 }
 /** A NEAR transaction (or client setup) failed via near-kit. */
-export interface DexAggregatorNearError {
+export interface DEX_AGGREGATOR_NEAR_ERROR {
   kind: "near";
   message: string;
   /** Original near-kit error for advanced matching; you usually do
@@ -60,23 +60,23 @@ export interface DexAggregatorNearError {
 }
 // =================================================
 /** Discriminated union of every failure mode this toolbox surfaces. */
-export type DexAggregatorError =
-  | DexAggregatorRouteNotFoundError
-  | DexAggregatorInvalidParamsError
-  | DexAggregatorHttpError
-  | DexAggregatorParseError
-  | DexAggregatorBase64DecodeError
-  | DexAggregatorInvalidNumberError
-  | DexAggregatorNearError;
+export type DEX_AGGREGATOR_ERROR =
+  | DEX_AGGREGATOR_ROUTE_NOT_FOUND_ERROR
+  | DEX_AGGREGATOR_INVALID_PARAMS_ERROR
+  | DEX_AGGREGATOR_HTTP_ERROR
+  | DEX_AGGREGATOR_PARSE_ERROR
+  | DEX_AGGREGATOR_BASE64_DECODE_ERROR
+  | DEX_AGGREGATOR_INVALID_NUMBER_ERROR
+  | DEX_AGGREGATOR_NEAR_ERROR;
 // =================================================
-/** Format a `DexAggregatorError` for `console.error` / log output.
+/** Format a `DEX_AGGREGATOR_ERROR` for `console.error` / log output.
  *
  *  Exported from the types module so callers can print a typed error
- *  even when the throwable class lives in `dex_aggregator_client.ts`. */
-export function formatDexAggregatorError(e: DexAggregatorError): string {
+ *  even when the throwable class lives in `client.ts`. */
+export function FORMAT_DEX_AGGREGATOR_ERROR(e: DEX_AGGREGATOR_ERROR): string {
   switch (e.kind) {
     case "route_not_found":
-      return `dex-aggregator: no route found for ${e.tokenIn} -> ${e.tokenOut} (${e.amountDesc}): ${e.hint}`;
+      return `dex-aggregator: no route found for ${e.token_in} -> ${e.token_out} (${e.amount_desc}): ${e.hint}`;
     case "invalid_params":
       return `dex-aggregator: invalid params: ${e.message}`;
     case "http":

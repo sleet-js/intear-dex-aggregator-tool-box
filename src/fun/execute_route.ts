@@ -1,21 +1,21 @@
 // =================================================
-// dex_aggregator_execute_route_fun
-// Execute one quoted `Route`. Two named entry points, one shared
+// execute_route
+// Execute one quoted `ROUTE`. Two named entry points, one shared
 // action-building pipeline:
 //
-//   • executeRouteSequential(near, route, opts)
+//   • EXECUTE_ROUTE_SEQUENTIAL(near, route, opts)
 //       backend / CLI path. One `near.transaction(signer).functionCall(...).send()`
 //       per instruction, sequentially. Uses near-kit's `Near` (private-
 //       key signer).
 //
-//   • executeRouteBatched(wallet, route, opts)
+//   • EXECUTE_ROUTE_BATCHED(wallet, route, opts)
 //       browser path. Hands the wallet an array of prebuilt transactions
 //       and lets it batch them into ONE popup via
 //       `wallet.signAndSendTransactions({ transactions: [...] })`.
 //       Each NEAR transaction is single-receiver; the wallet signs and
 //       broadcasts each in nonce order.
 //
-// Both paths share `prepareEntries` + `buildActionsForTx` so the
+// Both paths share `prepare_entries` + `build_actions_for_tx` so the
 // decoded args, gas, and deposit are computed once.
 //
 // Per-instruction `continue_if_failed` (or its router alias
@@ -27,20 +27,20 @@ import type {
   FinalExecutionOutcome,
 } from "near-kit";
 import {
-  type FunctionCallAction,
-  type NearTransactionInstruction,
-  type Route,
-  shouldContinueOnFailure,
-} from "../../lib/types/dex_aggregator_route_response_type.ts";
+  type FUNCTION_CALL_ACTION,
+  type NEAR_TRANSACTION_INSTRUCTION,
+  type ROUTE,
+  SHOULD_CONTINUE_ON_FAILURE,
+} from "../lib/route_response_type.ts";
 import {
-  DexAggregatorClientError,
-} from "../../lib/helper/dex_aggregator_client.ts";
-import type { DexAggregatorError } from "../../lib/types/dex_aggregator_error_type.ts";
+  DEX_AGGREGATOR_CLIENT_ERROR,
+} from "../lib/client.ts";
+import type { DEX_AGGREGATOR_ERROR } from "../lib/error_type.ts";
 import {
-  decodeInstructionArgsAsJson,
-  depositFromRoute,
-  gasFromRoute,
-} from "../../lib/helper/dex_aggregator_decode.ts";
+  DECODE_INSTRUCTION_ARGS_AS_JSON,
+  DEPOSIT_FROM_ROUTE,
+  GAS_FROM_ROUTE,
+} from "../lib/decode.ts";
 // =================================================
 /** Minimal wallet contract for the batched browser path. Matches the
  *  `signAndSendTransactions` method on `@hot-labs/near-connect`'s
@@ -48,10 +48,10 @@ import {
  *  ParentFrameWallet, InjectedWallet) implements it. We don't take a
  *  dependency on `@hot-labs/near-connect` here so the lib stays
  *  wallet-framework-agnostic; the consumer casts. */
-export interface BatchWallet {
+export interface BATCH_WALLET {
   signAndSendTransactions(params: {
     signerId?: string;
-    transactions: Array<{ receiverId: string; actions: ActionLike[] }>;
+    transactions: Array<{ receiverId: string; actions: ACTION_LIKE[] }>;
   }): Promise<FinalExecutionOutcome[]>;
 }
 
@@ -62,7 +62,7 @@ export interface BatchWallet {
  *  `gas` must be a string (digits-only — match's near-kit's `GasInput`
  *  via the `${number}` template branch). `deposit` accepts string
  *  or bigint (near-kit's `AmountInput` is a union of both). */
-export type ActionLike = {
+export type ACTION_LIKE = {
   functionCall: {
     methodName: string;
     args: unknown;
@@ -74,52 +74,52 @@ export type ActionLike = {
 /** Options shared by both paths. `verbose` is opt-in (defaults to
  *  false) — the library is silent unless the caller asks for a
  *  trace of what it's sending. */
-export interface ExecuteRouteOptions {
-  signerId?: string;
+export interface EXECUTE_ROUTE_OPTIONS {
+  signer_id?: string;
   verbose?: boolean;
 }
 // =================================================
 /** Sequential execution: one NEAR transaction per route instruction,
  *  sent in order via `near-kit`. Use this when there is no wallet
  *  attached (private-key signer, scripts, tests). */
-export async function executeRouteSequential(
+export async function EXECUTE_ROUTE_SEQUENTIAL(
   near: Near,
-  route: Route,
-  options: ExecuteRouteOptions = {},
+  route: ROUTE,
+  options: EXECUTE_ROUTE_OPTIONS = {},
 ): Promise<FinalExecutionOutcome[]> {
-  const signerId = options.signerId ?? resolveDefaultSignerId(near);
-  if (!signerId) {
-    throw new DexAggregatorClientError({
+  const signer_id = options.signer_id ?? resolve_default_signer_id(near);
+  if (!signer_id) {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
       kind: "invalid_params",
       message:
-        "executeRouteSequential: no signerId available — pass one explicitly or build Near with defaultSignerId",
+        "EXECUTE_ROUTE_SEQUENTIAL: no signer_id available — pass one explicitly or build Near with defaultSignerId",
     });
   }
-  const entries = prepareEntries(route, options.verbose === true);
+  const entries = prepare_entries(route, options.verbose === true);
   if (entries.length === 0) return [];
-  return sendOneAtATime(near, entries, signerId, options.verbose === true);
+  return send_one_at_a_time(near, entries, signer_id, options.verbose === true);
 }
 // =================================================
 /** Batched execution: hand the wallet the whole route's transactions
  *  in one popup. The wallet must implement `signAndSendTransactions`
- *  (plural); a missing method throws a typed `DexAggregatorClientError`
+ *  (plural); a missing method throws a typed `DEX_AGGREGATOR_CLIENT_ERROR`
  *  so callers can prompt the user to reconnect a NEAR Connect session
  *  that supports batching.
  *
  *  @example
  *  ```ts
- *  import { executeRouteBatched } from "intear-dex-aggregator-tool-box";
+ *  import { EXECUTE_ROUTE_BATCHED } from "intear-dex-aggregator-tool-box";
  *  import { near_connect_client } from "@near-kit-tool-box/web";
  *
  *  const wallet = await near_connect_client().wallet();
- *  const outcomes = await executeRouteBatched(wallet, route);
+ *  const outcomes = await EXECUTE_ROUTE_BATCHED(wallet, route);
  *  ``` */
-export async function executeRouteBatched(
-  wallet: BatchWallet | unknown,
-  route: Route,
-  options: ExecuteRouteOptions = {},
+export async function EXECUTE_ROUTE_BATCHED(
+  wallet: BATCH_WALLET | unknown,
+  route: ROUTE,
+  options: EXECUTE_ROUTE_OPTIONS = {},
 ): Promise<FinalExecutionOutcome[]> {
-  const signerId = options.signerId ??
+  const signer_id = options.signer_id ??
     (typeof wallet === "object" && wallet !== null &&
       "accounts" in wallet && Array.isArray(
         (wallet as { accounts?: unknown }).accounts,
@@ -127,20 +127,20 @@ export async function executeRouteBatched(
       ? (((wallet as { accounts: Array<{ accountId: string }> })
         .accounts[0]?.accountId) || undefined)
       : undefined);
-  if (!signerId) {
-    throw new DexAggregatorClientError({
+  if (!signer_id) {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
       kind: "invalid_params",
       message:
-        "executeRouteBatched: no signerId available — pass `signerId` explicitly",
+        "EXECUTE_ROUTE_BATCHED: no signer_id available — pass `signer_id` explicitly",
     });
   }
-  assertSupportsBatching(wallet);
-  const entries = prepareEntries(route, options.verbose === true);
+  assert_supports_batching(wallet);
+  const entries = prepare_entries(route, options.verbose === true);
   if (entries.length === 0) return [];
-  return sendBatched(
-    wallet as BatchWallet,
+  return send_batched(
+    wallet as BATCH_WALLET,
     entries,
-    signerId,
+    signer_id,
     options.verbose === true,
   );
 }
@@ -149,61 +149,63 @@ export async function executeRouteBatched(
  *  expose `signAndSendTransactions` (plural). The feature check lives
  *  here so consumers don't have to know about near-kit's wallet
  *  adapter surface. */
-function assertSupportsBatching(wallet: unknown): asserts wallet is BatchWallet {
+function assert_supports_batching(
+  wallet: unknown,
+): asserts wallet is BATCH_WALLET {
   if (
     !wallet ||
     typeof wallet !== "object" ||
     typeof (wallet as { signAndSendTransactions?: unknown })
       .signAndSendTransactions !== "function"
   ) {
-    throw new DexAggregatorClientError({
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
       kind: "invalid_params",
       message:
-        "executeRouteBatched: wallet does not expose signAndSendTransactions — reconnect a NEAR Connect / Intear Wallet session that supports transaction batching.",
+        "EXECUTE_ROUTE_BATCHED: wallet does not expose signAndSendTransactions — reconnect a NEAR Connect / Intear Wallet session that supports transaction batching.",
     });
   }
 }
 // =================================================
-/** Build the (instructionIndex, NearTransactionInstruction, ActionLike[])
+/** Build the (instruction_index, NEAR_TRANSACTION_INSTRUCTION, ACTION_LIKE[])
  *  tuples both paths share. */
-function prepareEntries(
-  route: Route,
+function prepare_entries(
+  route: ROUTE,
   verbose: boolean,
 ): Array<{
-  instructionIndex: number;
-  tx: NearTransactionInstruction;
-  actions: ActionLike[];
+  instruction_index: number;
+  tx: NEAR_TRANSACTION_INSTRUCTION;
+  actions: ACTION_LIKE[];
 }> {
   const entries: Array<{
-    instructionIndex: number;
-    tx: NearTransactionInstruction;
-    actions: ActionLike[];
+    instruction_index: number;
+    tx: NEAR_TRANSACTION_INSTRUCTION;
+    actions: ACTION_LIKE[];
   }> = [];
   for (let i = 0; i < route.execution_instructions.length; i++) {
     const instruction = route.execution_instructions[i];
     if (!instruction) continue;
     if (!("NearTransaction" in instruction)) {
-      throw new DexAggregatorClientError({
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "near",
         message:
           "route contains a non-NearTransaction instruction (forward-compat; this toolbox only executes NearTransaction today)",
       });
     }
-    const tx: NearTransactionInstruction = instruction.NearTransaction;
-    const actions = buildActionsForTx(tx, verbose);
-    entries.push({ instructionIndex: i, tx, actions });
+    const tx: NEAR_TRANSACTION_INSTRUCTION = instruction.NearTransaction;
+    const actions = build_actions_for_tx(tx, verbose);
+    entries.push({ instruction_index: i, tx, actions });
   }
   return entries;
 }
 // =================================================
-async function sendBatched(
-  wallet: BatchWallet,
+async function send_batched(
+  wallet: BATCH_WALLET,
   entries: Array<{
-    instructionIndex: number;
-    tx: NearTransactionInstruction;
-    actions: ActionLike[];
+    instruction_index: number;
+    tx: NEAR_TRANSACTION_INSTRUCTION;
+    actions: ACTION_LIKE[];
   }>,
-  signerId: string,
+  signer_id: string,
   verbose: boolean,
 ): Promise<FinalExecutionOutcome[]> {
   const transactions = entries.map((entry) => ({
@@ -214,40 +216,40 @@ async function sendBatched(
     console.log(
       `[dex-aggregator] batching ${transactions.length} transaction(s) into one wallet popup:`,
       entries
-        .map((e) => `${e.instructionIndex}:${e.tx.receiver_id}`)
+        .map((e) => `${e.instruction_index}:${e.tx.receiver_id}`)
         .join(", "),
     );
   }
-  let rawOutcomes: FinalExecutionOutcome[];
+  let raw_outcomes: FinalExecutionOutcome[];
   try {
-    rawOutcomes = await wallet.signAndSendTransactions({
-      signerId,
+    raw_outcomes = await wallet.signAndSendTransactions({
+      signerId: signer_id,
       transactions,
     });
   } catch (cause) {
-    throw wrapNearError(cause);
+    throw wrap_near_error(cause);
   }
   const outcomes: FinalExecutionOutcome[] = [];
   for (let i = 0; i < entries.length; i++) {
     const entry = entries[i]!;
-    const outcome = rawOutcomes[i];
+    const outcome = raw_outcomes[i];
     if (!outcome) continue;
     const success = !!(outcome.status &&
       typeof outcome.status === "object" &&
       "SuccessValue" in outcome.status);
     if (!success) {
-      if (shouldContinueOnFailure(entry.tx)) {
+      if (SHOULD_CONTINUE_ON_FAILURE(entry.tx)) {
         if (verbose) {
           console.warn(
-            `[dex-aggregator] note: batched outcome ${entry.instructionIndex} (${entry.tx.receiver_id}) returned failure but continue_if_failed is set, skipping`,
+            `[dex-aggregator] note: batched outcome ${entry.instruction_index} (${entry.tx.receiver_id}) returned failure but continue_if_failed is set, skipping`,
           );
         }
         continue;
       }
-      throw new DexAggregatorClientError({
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "near",
         message:
-          `route ${entry.instructionIndex} (${entry.tx.receiver_id}) returned a failure status: ${JSON.stringify(outcome.status)}`,
+          `route ${entry.instruction_index} (${entry.tx.receiver_id}) returned a failure status: ${JSON.stringify(outcome.status)}`,
       });
     }
     outcomes.push(outcome);
@@ -255,44 +257,44 @@ async function sendBatched(
   return outcomes;
 }
 // =================================================
-async function sendOneAtATime(
+async function send_one_at_a_time(
   near: Near,
   entries: Array<{
-    instructionIndex: number;
-    tx: NearTransactionInstruction;
-    actions: ActionLike[];
+    instruction_index: number;
+    tx: NEAR_TRANSACTION_INSTRUCTION;
+    actions: ACTION_LIKE[];
   }>,
-  signerId: string,
+  signer_id: string,
   verbose: boolean,
 ): Promise<FinalExecutionOutcome[]> {
   const outcomes: FinalExecutionOutcome[] = [];
   for (const entry of entries) {
     try {
-      const outcome = await sendOneTx(near, signerId, entry.tx, entry.actions, verbose);
+      const outcome = await send_one_tx(near, signer_id, entry.tx, entry.actions, verbose);
       outcomes.push(outcome);
     } catch (cause) {
-      if (shouldContinueOnFailure(entry.tx)) {
+      if (SHOULD_CONTINUE_ON_FAILURE(entry.tx)) {
         if (verbose) {
           console.warn(
-            `[dex-aggregator] note: tx ${entry.instructionIndex} to ${entry.tx.receiver_id} failed but continue_if_failed is set, skipping: ${(cause as Error).message ?? cause}`,
+            `[dex-aggregator] note: tx ${entry.instruction_index} to ${entry.tx.receiver_id} failed but continue_if_failed is set, skipping: ${(cause as Error).message ?? cause}`,
           );
         }
         continue;
       }
-      throw wrapNearError(cause);
+      throw wrap_near_error(cause);
     }
   }
   return outcomes;
 }
 // =================================================
-async function sendOneTx(
+async function send_one_tx(
   near: Near,
-  signerId: string,
-  tx: NearTransactionInstruction,
-  actions: ActionLike[],
+  signer_id: string,
+  tx: NEAR_TRANSACTION_INSTRUCTION,
+  actions: ACTION_LIKE[],
   verbose: boolean,
 ): Promise<FinalExecutionOutcome> {
-  let builder = near.transaction(signerId);
+  let builder = near.transaction(signer_id);
   for (const action of actions) {
     const fc = action.functionCall;
     // Our prebuilt action shape matches near-kit's internal call form
@@ -315,7 +317,7 @@ async function sendOneTx(
   }
   if (verbose) {
     console.log(
-      `[dex-aggregator] sending ${actions.length} action(s) to ${tx.receiver_id} as ${signerId}`,
+      `[dex-aggregator] sending ${actions.length} action(s) to ${tx.receiver_id} as ${signer_id}`,
     );
   }
   return (await builder.send()) as FinalExecutionOutcome;
@@ -326,20 +328,20 @@ async function sendOneTx(
  *  internally (`{ functionCall: { methodName, args, gas, deposit } }`),
  *  so the wallet adapter's `nearActionsToConnectorActions` can
  *  normalize them straight to the wallet protocol format. */
-function buildActionsForTx(
-  tx: NearTransactionInstruction,
+function build_actions_for_tx(
+  tx: NEAR_TRANSACTION_INSTRUCTION,
   verbose: boolean,
-): ActionLike[] {
-  const actions: ActionLike[] = [];
+): ACTION_LIKE[] {
+  const actions: ACTION_LIKE[] = [];
   for (let i = 0; i < tx.actions.length; i++) {
     const act = tx.actions[i]!;
     if (!("FunctionCall" in act)) {
-      throw new DexAggregatorClientError({
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "near",
         message: `action ${i} is not a FunctionCall — only FunctionCall actions are supported`,
       });
     }
-    const fc: FunctionCallAction = act.FunctionCall;
+    const fc: FUNCTION_CALL_ACTION = act.FunctionCall;
     const context = `${tx.receiver_id}.${fc.method_name}`;
     // Decode the base64 args into a parsed JSON object (falling back
     // to a string or Uint8Array for legacy raw-binary payloads).
@@ -347,7 +349,7 @@ function buildActionsForTx(
     // serialization trap where JSON.stringify(Uint8Array) yields an
     // opaque `{ "0": 123, "1": 34, ... }` object that the contract
     // cannot parse.
-    const args = decodeInstructionArgsAsJson(fc.args, context);
+    const args = DECODE_INSTRUCTION_ARGS_AS_JSON(fc.args, context);
     if (verbose) {
       console.log(
         `[dex-aggregator] → ${context}`,
@@ -362,26 +364,26 @@ function buildActionsForTx(
       functionCall: {
         methodName: fc.method_name,
         args,
-        gas: gasFromRoute(fc.gas),
-        deposit: depositFromRoute(fc.deposit),
+        gas: GAS_FROM_ROUTE(fc.gas),
+        deposit: DEPOSIT_FROM_ROUTE(fc.deposit),
       },
     });
   }
   return actions;
 }
 // =================================================
-function wrapNearError(cause: unknown): DexAggregatorClientError {
+function wrap_near_error(cause: unknown): DEX_AGGREGATOR_CLIENT_ERROR {
   const message =
     cause instanceof Error
       ? cause.message
       : (typeof cause === "string" ? cause : JSON.stringify(cause));
-  const wrapped: DexAggregatorError = {
+  const wrapped: DEX_AGGREGATOR_ERROR = {
     kind: "near",
     message,
   };
-  return new DexAggregatorClientError(wrapped);
+  return new DEX_AGGREGATOR_CLIENT_ERROR(wrapped);
 }
-function resolveDefaultSignerId(near: Near): string | undefined {
+function resolve_default_signer_id(near: Near): string | undefined {
   const candidate = (near as unknown as { defaultSignerId?: string })
     .defaultSignerId;
   if (typeof candidate === "string" && candidate.length > 0) return candidate;

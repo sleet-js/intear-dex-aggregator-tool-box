@@ -31,7 +31,7 @@ Two commands, no scripts, no extra files. The build emits one `dist/index.html` 
 
 - **`LOGIN`** — opens the wallet popup, signs in.
 - **`GET ROUTES`** — quotes every viable DEX, prints the full JSON of each route in a `<details>` block, plus a per-route preview of every `NearTransaction` instruction.
-- **`EXECUTE ROUTE #n`** — sends the chosen route using the connected wallet in **one popup** (`executeRouteBatched`); all `NearTransaction` instructions for the route are batched into a single `signAndSendTransactions` call.
+- **`EXECUTE ROUTE #n`** — sends the chosen route using the connected wallet in **one popup** (`EXECUTE_ROUTE_BATCHED`); all `NearTransaction` instructions for the route are batched into a single `signAndSendTransactions` call.
 
 ### Pattern reference
 
