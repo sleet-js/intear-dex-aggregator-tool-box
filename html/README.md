@@ -2,7 +2,7 @@
 
 🌐 Tiny browser UI for the dex-aggregator tool box. Connects via the wallet exposed by `@near-kit-tool-box/web`, types `token in` / `amount in` / `token out` / `referrer`, hits `https://router.intear.tech`, then renders every route with full details and an EXECUTE button per route.
 
-Plain HTML + TypeScript (no React/Preact, no bundler). Bun's HTML dev server runs it directly.
+Plain HTML + TypeScript. No bundler, no script files, no package.json scripts.
 
 ### Defaults
 
@@ -13,14 +13,19 @@ Plain HTML + TypeScript (no React/Preact, no bundler). Bun's HTML dev server run
 
 You can paste any token contract into the inputs. Mainnet only — the tool box defaults to mainnet on first visit.
 
-### DEV
+### Run
 
 ```sh
-bun install
-bun run dev               # → http://0.0.0.0:5180/  (LAN-visible)
+bun install                                  # one-time deps
+
+bun build --compile --target=browser \
+  ./index.html --outdir ./dist               # build a single self-contained HTML
+
+cd dist && python3 -m http.server 5180 --bind 0.0.0.0
+# → http://localhost:5180/  (and  http://<lan-ip>:5180/)
 ```
 
-`bun run server.ts` calls `Bun.serve` with HTML imports — Bun reads the `<script type="module" src="./src/index.ts">` tag from `index.html`, transpiles TypeScript on the fly, and serves it on port 5180 (override with `PORT=...`). Binds 0.0.0.0 so phones on the LAN can reach it. No rsbuild/webpack/vite.
+Two commands, no scripts, no extra files. The build emits one `dist/index.html` with all JS/CSS inlined — drop it on any static host.
 
 ### What you get
 
@@ -31,8 +36,6 @@ bun run dev               # → http://0.0.0.0:5180/  (LAN-visible)
 ### Pattern reference
 
 `src/auth.ts` mirrors your sleet-svelte `setup-near-kit` `button_auth.svelte` line for line — `near_connect_client().wallet().getAccounts()` / `.connect()` / `.signOut()`. The tool box already wires `@hot-labs/near-connect`, so no direct import of the wallet adapter is needed.
-
-Mainnet is the tool box's default; no explicit `setNetwork_*` call needed.
 
 ---
 

@@ -1,16 +1,8 @@
-# Local
-.DS_Store
-*.local
-*.log*
-
-# Dist
+# dependencies (bun install)
 node_modules
-dist/
 
-# Profile
-.rspack-profile-*/
+# build output
+dist
 
-# IDE
-.vscode/*
-!.vscode/extensions.json
-.idea
+# logs
+*.log
