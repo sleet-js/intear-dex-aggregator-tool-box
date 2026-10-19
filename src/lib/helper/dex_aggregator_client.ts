@@ -227,7 +227,14 @@ export class DexAggregatorClient {
     }
     const qs = this.buildQueryPairs(params);
     const url = `${this.baseUrl}/route?${qs.toString()}`;
-    const res = await this.fetchImpl(url, { method: "GET" });
+    // Browser `fetch` enforces strict `this`-binding to the global
+    // object. Detached calls fail with `Illegal invocation` on Chrome
+    // (Android) and Safari; Node/Bun ignore it, so this slips past
+    // typecheck. Reflect.apply preserves the receiver across runtimes.
+    const res = await Reflect.apply(this.fetchImpl, globalThis, [
+      url,
+      { method: "GET" },
+    ]);
     if (!res.ok) {
       const body = await safeText(res);
       const snippet = body.slice(0, 300);

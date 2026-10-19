@@ -149,8 +149,14 @@ function renderError(err: unknown): void {
         ? err.message
         : String(err);
   out.appendChild(el("div", { className: "error", text: `Error: ${escape(msg)}` }));
-  out.appendChild(el("h2", { text: "Raw request details" }));
-  out.appendChild(el("pre", { text: "(see console)" }));
+  // Show the raw error in the DOM so a phone-only user can read it
+  // (their DevTools might be awkward to keep open).
+  out.appendChild(el("h3", { text: "Raw error (also in DevTools console)" }));
+  out.appendChild(el("pre", { text: msg }));
+  if (err instanceof Error && err.stack) {
+    out.appendChild(el("h4", { text: "Stack" }));
+    out.appendChild(el("pre", { text: err.stack }));
+  }
 }
 
 async function executeOne(route: Route, index: number): Promise<void> {
