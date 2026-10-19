@@ -60,16 +60,21 @@ const best = await getBestRoute(client, params);
 
 ### 3. Execute with your near-kit client
 
-`executeRoute` takes the same `Near` you already use — built directly, or via `near_kit_client` (`near-kit-tool-box-ts/web`) or `near_kit_env` (`near-kit-tool-box-ts/env`) — all of them produce a `Near` that plugs straight in. Each `NearTransaction` instruction becomes one multi-action transaction with the router's exact gas + deposit, sent **sequentially** in instruction order. Fee instructions (`is_fee_transaction: true` on the router, or `continue_if_failed: true` for forward-compat) are skipped on failure; anything else aborts.
+Two named entry points, one per execution strategy — pick the one that matches how your `Near` (or wallet) signs transactions:
+
+- `executeRouteSequential(near, route, opts)` — backend / CLI path. The same `Near` you already use (built directly, or via `near_kit_client` / `near_kit_env` from `near-kit-tool-box-ts`). Each `NearTransaction` instruction becomes one multi-action transaction with the router's exact gas + deposit, sent **sequentially** in instruction order.
+- `executeRouteBatched(wallet, route, opts)` — browser path. Hands the wallet an array of prebuilt transactions and lets it batch them into **one popup** via `wallet.signAndSendTransactions({ transactions: [...] })`. This is the only way to ship a multi-leg swap through a NEAR Connect / Intear Wallet session without N popups in a row (`near-kit`'s `Near` only exposes the singular `signAndSendTransaction`).
+
+Fee instructions (`is_fee_transaction: true` on the router, or `continue_if_failed: true` for forward-compat) are skipped on failure in both paths; anything else aborts. `verbose` is opt-in on both paths (defaults to `false` — the library is silent unless you ask for a trace).
 
 ```ts
 import {
   DexAggregatorClient,
-  executeRoute,
+  executeRouteSequential,
   DexAggregatorClientError,
 } from "intear-dex-aggregator-tool-box";
 import { Near } from "near-kit";
-// or for a browser: import { near_kit_client } from "@near-kit-tool-box/web";
+// or for a browser: import { near_connect_client } from "@near-kit-tool-box/web";
 
 const near = new Near({
   network: "mainnet",
@@ -78,7 +83,9 @@ const near = new Near({
 });
 
 try {
-  const outcomes = await executeRoute(near, best);
+  const outcomes = await executeRouteSequential(near, best, {
+    verbose: true, // opt-in: log every leg as it sends
+  });
   for (const outcome of outcomes) {
     console.log(outcome.transaction?.hash, "/", outcome.status);
   }
@@ -88,6 +95,26 @@ try {
   }
 }
 ```
+
+#### Browser path (one popup per route)
+
+```ts
+import {
+  executeRouteBatched,
+} from "intear-dex-aggregator-tool-box";
+import { near_connect_client } from "@near-kit-tool-box/web";
+
+const wallet = await near_connect_client().wallet();
+// signerId must be passed explicitly — read it from
+// `wallet.getAccounts()` (or your own state) before calling.
+const [{ accountId: signerId }] = await wallet.getAccounts();
+const outcomes = await executeRouteBatched(wallet, best, {
+  signerId,
+  verbose: true,
+});
+```
+
+`executeRouteBatched` does the runtime check for `wallet.signAndSendTransactions` (plural) inside the package and throws a typed `DexAggregatorClientError` if the connected session doesn't support batching — prompt the user to reconnect a NEAR Connect / Intear Wallet session.
 
 ### 4. Try the interactive bin
 
@@ -172,7 +199,7 @@ Verified live responses (run `bun run swap near 100000000000000000000000 usdt.te
 │   └── fun/
 │       └── dex_aggregator/
 │           ├── dex_aggregator_get_routes_fun_json.ts       # getRoutes / getBestRoute (1:1 parity with rs path)
-│           └── dex_aggregator_execute_route_fun.ts         # executeRoute (near-kit send)
+│           └── dex_aggregator_execute_route_fun.ts         # executeRouteSequential / executeRouteBatched (near-kit + wallet send)
 ├── bin/                                          # top-level CLI bin (not part of lib)
 │   └── dex_aggregator_swap_bin.ts                # interactive quote → pick → preview → execute
 └── html/                                         # rsbuild browser demo with @near-kit-tool-box/web

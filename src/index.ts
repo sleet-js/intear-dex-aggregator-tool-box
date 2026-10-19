@@ -3,10 +3,9 @@
 // Typed client + near-kit execution helpers for the intear
 // dex-aggregator (`GET https://router.intear.tech/route`).
 //
-// Quote with `DexAggregatorClient`, execute with `executeRoute`.
-// Designed to plug straight into a `Near` from `near-kit` (or
-// `near_kit_client` / `near_kit_env` from near-kit-tool-box-ts —
-// all are the same `Near` instance).
+// Quote with `DexAggregatorClient`, execute with
+// `executeRouteSequential` (backend / near-kit `Near`) or
+// `executeRouteBatched` (browser / `@hot-labs/near-connect` wallet).
 //
 // Quoting is read-only (no credentials). Executing needs a funded
 // mainnet signer — the router is mainnet only.
@@ -84,9 +83,11 @@ export {
 } from "./lib/types/dex_aggregator_route_response_type.ts";
 // functions
 export {
-  executeRoute,
+  executeRouteSequential,
+  executeRouteBatched,
   type BatchWallet,
   type ActionLike,
+  type ExecuteRouteOptions,
 } from "./fun/dex_aggregator/dex_aggregator_execute_route_fun.ts";
 export {
   getRoutes,

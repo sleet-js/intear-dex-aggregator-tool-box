@@ -8,9 +8,11 @@
 //
 // The client holds no signer — signing stays with your near-kit `Near`
 // instance (built directly or via `near_kit_client` / `near_kit_env`
-// from near-kit-tool-box-ts), which you hand to `executeRoute`
-// separately. This keeps quoting (read-only, no credentials) cleanly
-// apart from executing (needs a mainnet signer).
+// from near-kit-tool-box-ts), which you hand to
+// `executeRouteSequential` separately. This keeps quoting (read-only,
+// no credentials) cleanly apart from executing (needs a mainnet
+// signer). For the browser path, hand a wallet from
+// `@hot-labs/near-connect` to `executeRouteBatched` instead.
 // =================================================
 import {
   formatDexAggregatorError,

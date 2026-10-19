@@ -1,21 +1,26 @@
 // =================================================
 // dex_aggregator_execute_route_fun
-// Execute one quoted `Route` against a `near-kit` `Near` client.
+// Execute one quoted `Route`. Two named entry points, one shared
+// action-building pipeline:
 //
-// Backend path (private-key signer, no wallet): one
-// `near.transaction(signer).functionCall(...).send()` per
-// instruction, sequentially.
+//   • executeRouteSequential(near, route, opts)
+//       backend / CLI path. One `near.transaction(signer).functionCall(...).send()`
+//       per instruction, sequentially. Uses near-kit's `Near` (private-
+//       key signer).
 //
-// Browser path (wallet attached, e.g. via `fromHotConnect` adapter):
-// callers may pass a `wallet` directly — when set, we hand the
-// wallet an array of prebuilt transactions and let it batch them
-// into ONE popup via `wallet.signAndSendTransactions({ transactions:
-// [...] })`. Each NEAR transaction is single-receiver; the wallet
-// signs and broadcasts each in nonce order.
+//   • executeRouteBatched(wallet, route, opts)
+//       browser path. Hands the wallet an array of prebuilt transactions
+//       and lets it batch them into ONE popup via
+//       `wallet.signAndSendTransactions({ transactions: [...] })`.
+//       Each NEAR transaction is single-receiver; the wallet signs and
+//       broadcasts each in nonce order.
 //
-// An instruction flagged `continue_if_failed` (or its router alias
-// `is_fee_transaction`) is skipped (with an stderr note) when its
-// transaction fails; otherwise the first failure aborts.
+// Both paths share `prepareEntries` + `buildActionsForTx` so the
+// decoded args, gas, and deposit are computed once.
+//
+// Per-instruction `continue_if_failed` (or its router alias
+// `is_fee_transaction`) is honored in both paths: failed legs with
+// the flag are skipped with a stderr note; anything else aborts.
 // =================================================
 import type { Near } from "near-kit";
 import type {
@@ -37,9 +42,12 @@ import {
   gasFromRoute,
 } from "../../lib/helper/dex_aggregator_decode.ts";
 // =================================================
-/** Minimal contract callers need to satisfy when batching. The
- *  underlying `@hot-labs/near-connect` `NearWalletBase` matches
- *  this exactly. */
+/** Minimal wallet contract for the batched browser path. Matches the
+ *  `signAndSendTransactions` method on `@hot-labs/near-connect`'s
+ *  `NearWalletBase` — every concrete wallet (SandboxedWallet,
+ *  ParentFrameWallet, InjectedWallet) implements it. We don't take a
+ *  dependency on `@hot-labs/near-connect` here so the lib stays
+ *  wallet-framework-agnostic; the consumer casts. */
 export interface BatchWallet {
   signAndSendTransactions(params: {
     signerId?: string;
@@ -62,37 +70,110 @@ export type ActionLike = {
     deposit: string | bigint;
   };
 };
-
-/** Execute one quoted route.
- *
- *  When `wallet` is provided the whole route is sent to the wallet
- *  in ONE popup via `wallet.signAndSendTransactions({ transactions
- *  })`. When omitted, the function falls back to the per-tx
- *  near-kit path (one NEAR transaction per route instruction).
- *  Per-instruction `continue_if_failed` is honored in both paths. */
-export async function executeRoute(
+// =================================================
+/** Options shared by both paths. `verbose` is opt-in (defaults to
+ *  false) — the library is silent unless the caller asks for a
+ *  trace of what it's sending. */
+export interface ExecuteRouteOptions {
+  signerId?: string;
+  verbose?: boolean;
+}
+// =================================================
+/** Sequential execution: one NEAR transaction per route instruction,
+ *  sent in order via `near-kit`. Use this when there is no wallet
+ *  attached (private-key signer, scripts, tests). */
+export async function executeRouteSequential(
   near: Near,
   route: Route,
-  options: {
-    signerId?: string;
-    verbose?: boolean;
-    /** Wallet batching adapter. When present, we hand the wallet
-     *  all transactions at once (one popup). When omitted, we
-     *  fall back to near-kit's per-tx path. */
-    wallet?: BatchWallet;
-  } = {},
+  options: ExecuteRouteOptions = {},
 ): Promise<FinalExecutionOutcome[]> {
   const signerId = options.signerId ?? resolveDefaultSignerId(near);
   if (!signerId) {
     throw new DexAggregatorClientError({
       kind: "invalid_params",
       message:
-        "executeRoute: no signerId available — pass one explicitly or build Near with defaultSignerId",
+        "executeRouteSequential: no signerId available — pass one explicitly or build Near with defaultSignerId",
     });
   }
-  const verbose = options.verbose !== false;
-  // Pre-extract every (receiverId, actions[]) pair so both paths
-  // share one source of truth for the actions.
+  const entries = prepareEntries(route, options.verbose === true);
+  if (entries.length === 0) return [];
+  return sendOneAtATime(near, entries, signerId, options.verbose === true);
+}
+// =================================================
+/** Batched execution: hand the wallet the whole route's transactions
+ *  in one popup. The wallet must implement `signAndSendTransactions`
+ *  (plural); a missing method throws a typed `DexAggregatorClientError`
+ *  so callers can prompt the user to reconnect a NEAR Connect session
+ *  that supports batching.
+ *
+ *  @example
+ *  ```ts
+ *  import { executeRouteBatched } from "intear-dex-aggregator-tool-box";
+ *  import { near_connect_client } from "@near-kit-tool-box/web";
+ *
+ *  const wallet = await near_connect_client().wallet();
+ *  const outcomes = await executeRouteBatched(wallet, route);
+ *  ``` */
+export async function executeRouteBatched(
+  wallet: BatchWallet | unknown,
+  route: Route,
+  options: ExecuteRouteOptions = {},
+): Promise<FinalExecutionOutcome[]> {
+  const signerId = options.signerId ??
+    (typeof wallet === "object" && wallet !== null &&
+      "accounts" in wallet && Array.isArray(
+        (wallet as { accounts?: unknown }).accounts,
+      )
+      ? (((wallet as { accounts: Array<{ accountId: string }> })
+        .accounts[0]?.accountId) || undefined)
+      : undefined);
+  if (!signerId) {
+    throw new DexAggregatorClientError({
+      kind: "invalid_params",
+      message:
+        "executeRouteBatched: no signerId available — pass `signerId` explicitly",
+    });
+  }
+  assertSupportsBatching(wallet);
+  const entries = prepareEntries(route, options.verbose === true);
+  if (entries.length === 0) return [];
+  return sendBatched(
+    wallet as BatchWallet,
+    entries,
+    signerId,
+    options.verbose === true,
+  );
+}
+// =================================================
+/** Throw a clear typed error when the connected wallet does not
+ *  expose `signAndSendTransactions` (plural). The feature check lives
+ *  here so consumers don't have to know about near-kit's wallet
+ *  adapter surface. */
+function assertSupportsBatching(wallet: unknown): asserts wallet is BatchWallet {
+  if (
+    !wallet ||
+    typeof wallet !== "object" ||
+    typeof (wallet as { signAndSendTransactions?: unknown })
+      .signAndSendTransactions !== "function"
+  ) {
+    throw new DexAggregatorClientError({
+      kind: "invalid_params",
+      message:
+        "executeRouteBatched: wallet does not expose signAndSendTransactions — reconnect a NEAR Connect / Intear Wallet session that supports transaction batching.",
+    });
+  }
+}
+// =================================================
+/** Build the (instructionIndex, NearTransactionInstruction, ActionLike[])
+ *  tuples both paths share. */
+function prepareEntries(
+  route: Route,
+  verbose: boolean,
+): Array<{
+  instructionIndex: number;
+  tx: NearTransactionInstruction;
+  actions: ActionLike[];
+}> {
   const entries: Array<{
     instructionIndex: number;
     tx: NearTransactionInstruction;
@@ -112,14 +193,7 @@ export async function executeRoute(
     const actions = buildActionsForTx(tx, verbose);
     entries.push({ instructionIndex: i, tx, actions });
   }
-  if (entries.length === 0) return [];
-
-  // Wallet batch path: ONE popup, ALL transactions.
-  if (options.wallet) {
-    return sendBatched(options.wallet, entries, signerId, verbose);
-  }
-  // Per-tx path: one send per instruction, sequential.
-  return sendOneAtATime(near, entries, signerId, verbose);
+  return entries;
 }
 // =================================================
 async function sendBatched(

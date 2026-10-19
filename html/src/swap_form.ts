@@ -2,26 +2,22 @@ import {
   DexAggregatorClient,
   DexAggregatorClientError,
   amountIn,
-  executeRoute,
+  executeRouteBatched,
   formatDexAggregatorError,
   getRoutes,
   withReferrerId,
   withTraderAccountId,
-  type BatchWallet,
   type Route,
 } from "../../src/index.ts";
-import {
-  near_connect_client,
-  near_kit_client,
-} from "@near-kit-tool-box/web";
+import { near_connect_client } from "@near-kit-tool-box/web";
 // ==========================================
 // Swap form: quote via DexAggregatorClient, render every route
 // with full details, then let the user execute a route with the
 // connected wallet.
 //
-// Wallet/auth state is read via `near_connect_client().wallet()` and
-// `near_kit_client()` — exactly the same pattern as the svelte
-// setup-near-kit demo (`@near-kit-tool-box/web`).
+// Wallet/auth state is read via `near_connect_client().wallet()` —
+// the same pattern as the svelte setup-near-kit demo
+// (`@near-kit-tool-box/web`).
 // ==========================================
 const client = new DexAggregatorClient();
 
@@ -177,26 +173,23 @@ async function executeOne(route: Route, index: number): Promise<void> {
     btn.textContent = "SENDING...";
   }
   try {
-    // Browser path: hand the wallet the whole route in a single popup.
-    // near-kit's wrapper exposes only signAndSendTransaction (singular)
-    // — calling it N times would mean N popups. Bypass near-kit and go
-    // directly to the raw NearConnector's wallet, which DOES expose
-    // signAndSendTransactions (plural). We pass the raw wallet to
-    // executeRoute, which then dispatches one popup containing all
+    // Browser path: hand the wallet the whole route in ONE popup.
+    //
+    // `near-kit`'s `Near` (returned by `near_kit_client()`) exposes
+    // only `signAndSendTransaction` (singular) — one popup per call.
+    // For a multi-leg swap that would mean N popups in a row, so we
+    // reach the connected wallet directly and use its
+    // `signAndSendTransactions` (plural) method, which all
+    // `@hot-labs/near-connect` wallets implement on `NearWalletBase`.
+    //
+    // `executeRouteBatched` accepts that wallet, performs the
+    // runtime feature check, and dispatches one popup containing all
     // route transactions (storage_deposit, register_assets,
     // near_withdraw, deposit_near, etc.).
     const wallet = await near_connect_client().wallet();
-    if (!wallet || typeof (wallet as { signAndSendTransactions?: unknown })
-      .signAndSendTransactions !== "function") {
-      throw new Error(
-        "Connected wallet does not support signAndSendTransactions; " +
-        "please reconnect a NEAR Connect / Intear Wallet session.",
-      );
-    }
-    const outcomes = await executeRoute(near_kit_client(), route, {
+    const outcomes = await executeRouteBatched(wallet, route, {
       signerId,
       verbose: true,
-      wallet: wallet as BatchWallet,
     });
     const ok = outcomes.every((o) =>
       o.status && typeof o.status === "object" &&

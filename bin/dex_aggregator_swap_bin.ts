@@ -33,7 +33,7 @@ import {
   amountIn,
   DexAggregatorClient,
   DexAggregatorClientError,
-  executeRoute,
+  executeRouteSequential,
   formatDexAggregatorError,
   getRoutes,
   printRoutesTable,
@@ -187,7 +187,9 @@ async function main(): Promise<void> {
   console.log();
   console.log(`Executing route ${index} via ${route.dex_id} ...`);
   try {
-    const outcomes = await executeRoute(near, route);
+    const outcomes = await executeRouteSequential(near, route, {
+      verbose: true,
+    });
     for (let i = 0; i < outcomes.length; i++) {
       const outcome = outcomes[i]!;
       const status = outcome.status && typeof outcome.status === "object" &&
