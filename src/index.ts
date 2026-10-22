@@ -43,6 +43,8 @@ export type {
   DEX_AGGREGATOR_BASE64_DECODE_ERROR,
   DEX_AGGREGATOR_INVALID_NUMBER_ERROR,
   DEX_AGGREGATOR_NEAR_ERROR,
+  DEX_AGGREGATOR_OUTCOME_UNAVAILABLE_ERROR,
+  DEX_AGGREGATOR_SWAP_FAILED_ERROR,
 } from "./lib/error_type";
 export { FORMAT_DEX_AGGREGATOR_ERROR } from "./lib/error_type";
 export type {
@@ -81,6 +83,18 @@ export {
   SHOULD_CONTINUE_ON_FAILURE,
   HAS_FEE_LEGS,
 } from "./lib/route_response_type";
+// outcome (GET /route/outcome)
+export type {
+  SWAP_OUTCOME,
+  OUTCOME_PARAMS,
+  BALANCE_CHANGE,
+} from "./lib/outcome_response_type";
+export {
+  COERCE_SWAP_OUTCOME,
+  SHOULD_CHARGE_FEE,
+  HAS_NEXT_STEPS,
+  SWAP_FAILED,
+} from "./lib/outcome_response_type";
 // functions
 export {
   EXECUTE_ROUTE_SEQUENTIAL,
@@ -92,5 +106,6 @@ export {
 export {
   GET_ROUTES,
   GET_BEST_ROUTE,
+  GET_ROUTE_OUTCOME,
 } from "./fun/get_routes";
 // =================================================

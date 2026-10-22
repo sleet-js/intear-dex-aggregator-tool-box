@@ -26,6 +26,11 @@ import {
   COERCE_ROUTE,
   type ROUTE,
 } from "./route_response_type";
+import {
+  COERCE_SWAP_OUTCOME,
+  type OUTCOME_PARAMS,
+  type SWAP_OUTCOME,
+} from "./outcome_response_type";
 // =================================================
 /** A typed error class so it can be `instanceof`-checked and `throw`n
  *  just like a normal error. Always carries a typed `error: DEX_AGGREGATOR_ERROR`
@@ -287,6 +292,130 @@ export class DEX_AGGREGATOR_CLIENT {
       });
     }
     return routes[0]!;
+  }
+  // =================================================
+  /** Ask the router what a route's transactions actually did on chain.
+   *
+   *  The endpoint waits (up to 60s) for every transaction and receipt
+   *  to execute, then compares the trader's balances before the first
+   *  transaction's block with the balances after the last receipt's
+   *  block. That is the only reliable way to see a refund: the
+   *  transaction carrying an `ft_transfer_call` swap still succeeds
+   *  when the DEX refunds it, so `SuccessValue` looks like success.
+   *
+   *  Two things callers usually want:
+   *
+   *  - `charge_fee` — send the route's fee transactions only when
+   *    `true`. A swap that failed on chain still lets its own
+   *    transaction succeed, so a failed swap does not stop the fees
+   *    from being sent unless you check.
+   *  - `next_steps` — instructions that move whatever ended up
+   *    somewhere else back (for example the `near_withdraw` that
+   *    unwraps wNEAR stranded by a failed NEAR swap). They are
+   *    ordinary `EXECUTION_INSTRUCTION`s, executable with the same
+   *    helpers as a route's own instructions.
+   *
+   *  @example
+   *  ```ts
+   *  const outcome = await client.GET_ROUTE_OUTCOME({
+   *    token_in: "near",
+   *    token_out: "usdt.tether-token.near",
+   *    trader_account_id: "you.near",
+   *    tx_hashes: outcomes.map((o) => o.transaction!.hash),
+   *    fee_amount: route.fee_amount ?? "0",
+   *  });
+   *  if (outcome.charge_fee) { /* send the fee legs *\/ }
+   *  else { /* show outcome.error, run outcome.next_steps *\/ }
+   *  ```
+   *
+   *  @param params The ids of the original route request, the trader's
+   *    hashes (without the fee transactions), and optionally
+   *    `fee_amount` and `wait_until`.
+   *  @throws `DEX_AGGREGATOR_CLIENT_ERROR` with `kind: "invalid_params"`
+   *    on an empty or over-long `tx_hashes` list, or on
+   *    `token_in === token_out`.
+   *  @throws `DEX_AGGREGATOR_CLIENT_ERROR` with `kind: "http"` if the
+   *    router cannot answer within its budget (a `504` here means the
+   *    *check* failed, not that the swap failed).
+   */
+  async GET_ROUTE_OUTCOME(params: OUTCOME_PARAMS): Promise<SWAP_OUTCOME> {
+    if (params.token_in.trim().length === 0 || params.token_out.trim().length === 0) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "invalid_params",
+        message: "token_in and token_out must both be non-empty",
+      });
+    }
+    if (params.token_in.trim() === params.token_out.trim()) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "invalid_params",
+        message: "token_in and token_out must be different",
+      });
+    }
+    if (params.trader_account_id.trim().length === 0) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "invalid_params",
+        message: "trader_account_id must be non-empty",
+      });
+    }
+    const hashes = params.tx_hashes
+      .map((h) => h.trim())
+      .filter((h) => h.length > 0);
+    if (hashes.length === 0) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "invalid_params",
+        message: "tx_hashes must have 1 to 20 transaction hashes",
+      });
+    }
+    if (hashes.length > 20) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "invalid_params",
+        message: `tx_hashes must have 1 to 20 transaction hashes, got ${hashes.length}`,
+      });
+    }
+    if (new Set(hashes).size !== hashes.length) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "invalid_params",
+        message: "tx_hashes must not repeat a transaction",
+      });
+    }
+    const qs = new URLSearchParams();
+    qs.set("token_in", params.token_in);
+    qs.set("token_out", params.token_out);
+    qs.set("trader_account_id", params.trader_account_id);
+    qs.set("tx_hashes", hashes.join(","));
+    const fee_amount = params.fee_amount?.trim();
+    qs.set("fee_amount", fee_amount && fee_amount.length > 0 ? fee_amount : "0");
+    if (params.wait_until === "swap") qs.set("wait_until", "swap");
+    if (this.api_key) qs.set("key", this.api_key);
+    const url = `${this.base_url}/route/outcome?${qs.toString()}`;
+    const res = await Reflect.apply(this.fetch_impl, globalThis, [
+      url,
+      { method: "GET" },
+    ]);
+    if (!res.ok) {
+      const body = await safe_text(res);
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "http",
+        message: `route/outcome answered ${res.status} ${res.statusText}: ${body.slice(0, 300)}`,
+      });
+    }
+    let raw: unknown;
+    try {
+      raw = await res.json();
+    } catch (cause) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "parse",
+        message: `route/outcome response was not JSON: ${(cause as Error)?.message ?? cause}`,
+      });
+    }
+    try {
+      return COERCE_SWAP_OUTCOME(raw);
+    } catch (cause) {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "parse",
+        message: `route/outcome response was malformed: ${(cause as Error)?.message ?? cause}`,
+      });
+    }
   }
 }
 // =================================================

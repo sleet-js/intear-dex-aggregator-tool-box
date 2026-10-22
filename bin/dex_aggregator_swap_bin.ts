@@ -15,20 +15,27 @@
 //   DEX_AGG_TRADER_ACCOUNT_ID DEX_AGG_SIGNING_PUBLIC_KEY
 //   NEAR_NETWORK (must be mainnet to --execute) NEAR_ACCOUNT_ID NEAR_PRIVATE_KEY
 //
+// The NEAR signer comes from `@near-kit-tool-box/env`, which loads
+// `.env` itself and exports `near_kit_env`, `NEAR_NETWORK` and
+// `NEAR_ACCOUNT_ID`. Quoting needs no credentials; only `--execute`
+// touches the signer.
+//
 // Examples (quoting needs no credentials — the router is mainnet only):
 //   bun run bin/dex_aggregator_swap_bin.ts
 //   bun run bin/dex_aggregator_swap_bin.ts near 100000000000000000000000 usdt.tether-token.near
 //   bun run bin/dex_aggregator_swap_bin.ts near 100000000000000000000000 wrap.near
 //
-// Execute (needs a funded mainnet signer in env):
-//   set -a; source .env; set +a
+// Execute (needs a funded mainnet signer in .env):
 //   bun run bin/dex_aggregator_swap_bin.ts near 100000000000000000000000 usdt.tether-token.near --execute
 //
 // Route-not-found demo (unknown token -> router answers `[]`):
 //   bun run bin/dex_aggregator_swap_bin.ts near 100000000000000000000000 this-token-does-not-exist-xyz123.near
 // =================================================
-import { Near } from "near-kit";
-import type { PrivateKey } from "near-kit";
+import {
+  NEAR_ACCOUNT_ID,
+  NEAR_NETWORK,
+  near_kit_env,
+} from "@near-kit-tool-box/env";
 import {
   AMOUNT_IN,
   DEX_AGGREGATOR_CLIENT,
@@ -160,12 +167,12 @@ async function main(): Promise<void> {
       "Dry run — no transaction sent. Re-run with --execute plus a funded mainnet",
     );
     console.log(
-      "signer (NEAR_NETWORK=mainnet NEAR_ACCOUNT_ID NEAR_PRIVATE_KEY) to swap.",
+      "signer (NEAR_NETWORK=mainnet NEAR_ACCOUNT_ID NEAR_PRIVATE_KEY in .env) to swap.",
     );
     return;
   }
 
-  if (envOr("NEAR_NETWORK", "testnet") !== "mainnet") {
+  if (NEAR_NETWORK !== "mainnet") {
     console.error(
       "Refusing to execute: the intear router is mainnet only but NEAR_NETWORK is not mainnet.",
     );
@@ -174,20 +181,15 @@ async function main(): Promise<void> {
     );
     process.exit(1);
   }
-  const pk = envOpt(["NEAR_PRIVATE_KEY"]);
-  if (!pk) {
-    console.error("Refusing to execute: NEAR_PRIVATE_KEY is not set.");
+  if (NEAR_ACCOUNT_ID.length === 0) {
+    console.error("Refusing to execute: NEAR_ACCOUNT_ID is not set.");
     process.exit(1);
   }
-  const near = new Near({
-    network: "mainnet",
-    privateKey: pk as PrivateKey,
-    defaultSignerId: envOr("NEAR_ACCOUNT_ID", ""),
-  });
   console.log();
   console.log(`Executing route ${index} via ${route.dex_id} ...`);
   try {
-    const outcomes = await EXECUTE_ROUTE_SEQUENTIAL(near, route, {
+    const outcomes = await EXECUTE_ROUTE_SEQUENTIAL(near_kit_env, route, {
+      signer_id: NEAR_ACCOUNT_ID,
       verbose: true,
     });
     for (let i = 0; i < outcomes.length; i++) {

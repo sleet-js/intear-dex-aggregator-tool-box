@@ -29,6 +29,7 @@
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
+    "@near-kit-tool-box/env": "^0.2.1",
     "near-kit": "^0.20.2"
   },
   "devDependencies": {
