@@ -16,9 +16,9 @@ You can paste any token contract into the inputs. Mainnet only — the tool box 
 ### Run
 
 ```sh
-bun install                       # one-time deps
-
-bun run html/index.html           # → http://localhost:3000/
+bun install
+# bun run index.html
+bun run html/index.html
 ```
 
 One command. Bun's dev server serves the entrypoint directly and transpiles the `.ts` imports on the fly — no bundler, no build step, no extra files.
@@ -33,6 +33,6 @@ One command. Bun's dev server serves the entrypoint directly and transpiles the 
 
 `src/auth.ts` mirrors your sleet-svelte `setup-near-kit` `button_auth.svelte` line for line — `near_connect_client().wallet().getAccounts()` / `.connect()` / `.signOut()`. The tool box already wires `@hot-labs/near-connect`, so no direct import of the wallet adapter is needed.
 
----
-
+==================
+<br/>
 copyright 2026 by sleet.near
