@@ -108,4 +108,17 @@ export {
   GET_BEST_ROUTE,
   GET_ROUTE_OUTCOME,
 } from "./fun/get_routes";
+// live quotes (wss://router.intear.tech/route/subscribe)
+export type {
+  ROUTE_SUBSCRIPTION,
+  ROUTE_UPDATE,
+  SUBSCRIBE_OPTIONS,
+  SUBSCRIPTION_SOCKET,
+  SOCKET_FACTORY,
+} from "./fun/subscribe_routes";
+export {
+  SUBSCRIBE_ROUTES,
+  build_subscribe_query,
+  default_socket_factory,
+} from "./fun/subscribe_routes";
 // =================================================

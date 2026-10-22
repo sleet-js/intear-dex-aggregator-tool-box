@@ -163,6 +163,12 @@ export class DEX_AGGREGATOR_CLIENT {
   REFERRER_ID_VALUE(): string | undefined {
     return this.referrer_id;
   }
+  /** Configured api key, if any. The `/route/subscribe` WebSocket
+   *  takes its key in the URL rather than in a message's query, so
+   *  `SUBSCRIBE_ROUTES` reads it from here. */
+  API_KEY_VALUE(): string | undefined {
+    return this.api_key;
+  }
   // =================================================
   /** Build the query pairs for one trade, layering per-trade values
    *  over client defaults. Pure helper exposed for callers that want
