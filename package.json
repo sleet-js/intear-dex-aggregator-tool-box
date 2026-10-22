@@ -26,6 +26,7 @@
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "swap": "bun run bin/dex_aggregator_swap_bin.ts",
+    "subscribe": "bun run bin/dex_aggregator_subscribe_bin.ts",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
