@@ -82,6 +82,23 @@ export type EXECUTION_INSTRUCTION = {
   NearTransaction: NEAR_TRANSACTION_INSTRUCTION;
 };
 // =================================================
+/** Nonce and block hash a quote can be signed against, present when
+ *  the request passed `signing_public_key` alongside
+ *  `trader_account_id`.
+ *
+ *  Lets a signer build the route's transactions without asking an RPC
+ *  for a nonce first. The first transaction takes `nonce + 1`, and each
+ *  one after it the nonce after the one before.
+ *
+ *  A quote can predate the trader's last transaction, so sign from
+ *  whichever is higher: this `nonce` or the last nonce you used. */
+export interface ROUTE_SIGNING {
+  /** The signing key's current nonce, as a decimal string. */
+  nonce: string;
+  /** A recent final block hash, base58. */
+  block_hash: string;
+}
+// =================================================
 /** One quoted swap route: one element of the array returned by
  *  `GET /route`. When no DEX can serve a pair the router answers
  *  `200` with an empty array (`[]`) — maps to `RouteNotFound` in
@@ -128,6 +145,10 @@ export interface ROUTE {
   /** What the fee transactions pay out of the wallet balance (wNEAR
    *  for NEAR), to pass to `POST /route/outcome`. */
   fee_amount?: string;
+  /** Nonce + block hash to sign against, present when the request
+   *  passed `signing_public_key` with `trader_account_id`. Enables
+   *  signing without an RPC round trip for the nonce. */
+  signing?: ROUTE_SIGNING;
   /** Quote discount (referral fee savings) signed into this route. */
   discount?: ROUTE_AMOUNT;
 }
@@ -141,7 +162,7 @@ export function SHOULD_CONTINUE_ON_FAILURE(
 ): boolean {
   return tx.continue_if_failed === true || tx.is_fee_transaction === true;
 }
-/** True when this route has any fee (referral-payout) legs that
+/** True when the route has any fee (referral-payout) legs that
  *  need to be sent only after `POST /route/outcome` reports
  *  `charge_fee: true`. */
 export function HAS_FEE_LEGS(route: ROUTE): boolean {
@@ -151,6 +172,47 @@ export function HAS_FEE_LEGS(route: ROUTE): boolean {
       (i.NearTransaction.is_fee_transaction === true ||
         i.NearTransaction.continue_if_failed === true),
   );
+}
+// =================================================
+/** The nonces to sign a route's transactions with, when the quote
+ *  carries `signing`.
+ *
+ *  The router's first transaction takes `nonce + 1` and each one after
+ *  it the nonce after the one before, so a route with `n`
+ *  transactions needs `n` sequential nonces starting at `nonce + 1`.
+ *
+ *  A quote can predate the trader's last transaction, so pass
+ *  `last_used_nonce` when you have one and the higher of the two wins.
+ *  That is the point of the `signing` block: the caller already knows
+ *  the nonce it just used, and the quote can be stale, without either
+ *  side needing an RPC call.
+ *
+ *  Returns `undefined` when the quote carries no `signing` block,
+ *  which means the caller must fetch a nonce from an RPC.
+ *
+ *  @example
+ *  ```ts
+ *  const nonces = ROUTE_SIGNING_NONCES(route, 42);
+ *  // route has 2 transactions and signing.nonce is 100, last used 42
+ *  // -> ["101", "102"]
+ *  ``` */
+export function ROUTE_SIGNING_NONCES(
+  route: ROUTE,
+  last_used_nonce?: string | number | bigint,
+): string[] | undefined {
+  const signing = route.signing;
+  if (!signing) return undefined;
+  let base = BigInt(signing.nonce);
+  if (last_used_nonce !== undefined) {
+    const last = BigInt(last_used_nonce);
+    if (last > base) base = last;
+  }
+  const count = route.execution_instructions.length;
+  const nonces: string[] = [];
+  for (let i = 0; i < count; i++) {
+    nonces.push((base + 1n + BigInt(i)).toString());
+  }
+  return nonces;
 }
 // =================================================
 // Lightweight runtime coercion for fields the bin uses.
@@ -292,7 +354,29 @@ export function COERCE_ROUTE(raw: Record<string, unknown>): ROUTE {
       typeof raw["fee_amount"] === "string"
         ? (raw["fee_amount"] as string)
         : undefined,
+    signing: coerce_signing(raw["signing"]),
     discount: raw["discount"] as ROUTE_AMOUNT | undefined,
+  };
+}
+// =================================================
+/** Read the optional `signing` block. Absent unless the request passed
+ *  `signing_public_key`, so a missing block is not an error. */
+function coerce_signing(value: unknown): ROUTE_SIGNING | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("route.signing: expected an object");
+  }
+  const raw = value as Record<string, unknown>;
+  const nonce = raw["nonce"];
+  if (nonce !== undefined && typeof nonce !== "string" && typeof nonce !== "number") {
+    throw new Error("route.signing.nonce: expected a string or number");
+  }
+  if (typeof raw["block_hash"] !== "string") {
+    throw new Error("route.signing.block_hash: expected a string");
+  }
+  return {
+    nonce: String(nonce),
+    block_hash: raw["block_hash"],
   };
 }
 // =================================================

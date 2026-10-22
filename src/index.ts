@@ -76,6 +76,7 @@ export {
 export type {
   ROUTE,
   ROUTE_AMOUNT,
+  ROUTE_SIGNING,
   EXECUTION_INSTRUCTION,
   NEAR_TRANSACTION_INSTRUCTION,
   NEAR_TRANSACTION_ACTION,
@@ -89,6 +90,7 @@ export {
   IS_DIRECTLY_EXECUTABLE,
   SHOULD_CONTINUE_ON_FAILURE,
   HAS_FEE_LEGS,
+  ROUTE_SIGNING_NONCES,
 } from "./lib/route_response_type";
 // outcome (GET /route/outcome)
 export type {
