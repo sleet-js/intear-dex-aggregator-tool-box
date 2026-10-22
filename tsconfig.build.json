@@ -3,6 +3,12 @@
   // bins out of the output, since `files` publishes only `dist`.
   // Typechecking the bins too lives in tsconfig.check.json.
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Constrains emit only: keeps the bins out of dist, since `files`
+    // publishes just dist. Kept here rather than in the shared options
+    // so no file selection in a derived config can conflict with it.
+    "rootDir": "src"
+  },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "html", "bin", "scripts"]
 }

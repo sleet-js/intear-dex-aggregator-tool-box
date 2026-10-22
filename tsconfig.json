@@ -1,7 +1,18 @@
 {
-  // Base config: compiler options only, no file selection and no emit
-  // config of its own. `tsconfig.check.json` typechecks src + bin,
-  // `tsconfig.build.json` emits dist from src.
+  // Base config. Holds the compiler options the whole project shares;
+  // the two derived configs decide which files are in the program:
+  //
+  //   tsconfig.check.json   src + bin, noEmit   (bun run typecheck)
+  //   tsconfig.build.json   src only, emits dist (bun run build)
+  //
+  // This file also carries an `include` of its own so that a bare
+  // `tsc` / `tsc --noEmit` — which reads this config and nothing else —
+  // typechecks src instead of falling back to `**/*` and sweeping in
+  // `bin/` and `html/`, which `rootDir: src` then rejects.
+  //
+  // `rootDir` deliberately lives on tsconfig.build.json rather than
+  // here: it only constrains emit, so keeping it out of the shared
+  // options means no file selection can conflict with it.
   "compilerOptions": {
     "lib": ["ESNext"],
     "target": "ESNext",
@@ -13,7 +24,6 @@
     "moduleResolution": "bundler",
     "declaration": true,
     "outDir": "dist",
-    "rootDir": "src",
 
     "strict": true,
     "skipLibCheck": true,
@@ -24,5 +34,7 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "html", "scripts"]
 }
