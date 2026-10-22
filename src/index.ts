@@ -18,6 +18,7 @@ export {
   DEX_AGGREGATOR_BASE_URL,
   DEX_AGGREGATOR_DEFAULT_MAX_WAIT_MS,
   DEX_AGGREGATOR_KNOWN_DEXES,
+  DEX_AGGREGATOR_ACTIVE_DEXES,
 } from "./lib/client";
 // helpers (raw decoding)
 export {

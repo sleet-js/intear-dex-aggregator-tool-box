@@ -49,9 +49,17 @@ export class DEX_AGGREGATOR_CLIENT_ERROR extends Error {
 export const DEX_AGGREGATOR_BASE_URL = "https://router.intear.tech";
 /** Default per-request wait budget (ms). */
 export const DEX_AGGREGATOR_DEFAULT_MAX_WAIT_MS = 2000;
-/** Known DEX ids the router may quote (allow-list values for `dexes`). */
+/** DEX ids the router accepts in `dexes`.
+ *
+ *  Only the first four currently return quotes. `Aidols`,
+ *  `MetaPool`, `Linear`, `XRhea` and `RNear` were removed upstream but
+ *  are still accepted so old requests do not fail — they simply never
+ *  quote. Kept here so a caller passing one of them gets no surprise,
+ *  but do not offer them in a UI. */
 export const DEX_AGGREGATOR_KNOWN_DEXES =
   "Rhea,Aidols,Wrap,RheaDcl,MetaPool,Linear,XRhea,RNear,Plach";
+/** The DEX ids that actually serve routes today. */
+export const DEX_AGGREGATOR_ACTIVE_DEXES = "Rhea,RheaDcl,Plach,Wrap";
 // =================================================
 /** Reusable client for the intear dex-aggregator `GET /route` API.
  *
