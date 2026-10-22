@@ -111,7 +111,7 @@ async function main(): Promise<void> {
   // Default the trader to the signer so storage-deposit legs are
   // included when you go on to execute.
   const trader = envOpt(["DEX_AGG_TRADER_ACCOUNT_ID"]) ??
-    envOpt(["NEAR_ACCOUNT_ID"]);
+    (NEAR_ACCOUNT_ID.length > 0 ? NEAR_ACCOUNT_ID : undefined);
   if (trader !== undefined) params = WITH_TRADER_ACCOUNT_ID(params, trader);
   const pubKey = envOpt(["DEX_AGG_SIGNING_PUBLIC_KEY"]);
   if (pubKey !== undefined) params = WITH_SIGNING_PUBLIC_KEY(params, pubKey);
