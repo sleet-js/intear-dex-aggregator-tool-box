@@ -1,6 +1,6 @@
 {
   "name": "@sleet-js/intear-dex-aggregator-tool-box",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Typed client + near-kit execution helpers for the intear dex-aggregator (https://router.intear.tech).",
   "license": "MIT",
   "homepage": "https://sleet-js.near.page",
