@@ -26,6 +26,7 @@
 //
 // Ctrl-C to stop early.
 // =================================================
+import { NEAR_ACCOUNT_ID } from "@near-kit-tool-box/env";
 import {
   AMOUNT_IN,
   DEX_AGGREGATOR_CLIENT,
@@ -113,7 +114,17 @@ async function main(): Promise<void> {
   if (dexes !== undefined) params = WITH_DEXES(params, dexes);
   const referrer = env_opt("DEX_AGG_REFERRER_ID");
   if (referrer !== undefined) params = WITH_REFERRER_ID(params, referrer);
-  const trader = env_opt("DEX_AGG_TRADER_ACCOUNT_ID");
+  // Default the trader to the connected signer, the way the swap bin
+  // does. Without it the router cannot plan the storage deposits and
+  // registrations this account is missing, so a quote shown here would
+  // not match the one the swap bin quotes a second later.
+  //
+  // Must go through env_opt, not process.env: an unset variable in a
+  // .env file is often present but EMPTY (`KEY=`), and `??` only
+  // catches null/undefined, so the raw read would yield "" and
+  // silently send no trader at all.
+  const trader = env_opt("DEX_AGG_TRADER_ACCOUNT_ID") ??
+    (NEAR_ACCOUNT_ID.length > 0 ? NEAR_ACCOUNT_ID : undefined);
   if (trader !== undefined) params = WITH_TRADER_ACCOUNT_ID(params, trader);
   const pub_key = env_opt("DEX_AGG_SIGNING_PUBLIC_KEY");
   if (pub_key !== undefined) params = WITH_SIGNING_PUBLIC_KEY(params, pub_key);

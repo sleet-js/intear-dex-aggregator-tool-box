@@ -92,15 +92,23 @@ export interface QUOTE_PARAMS {
    *  when `GET /route/outcome` reports `charge_fee: true` — see
    *  `EXECUTE_ROUTE_FULL`. */
   fees?: FEE_CHARGE[];
-  /** Public key the trader signs with. The route then carries
-   *  `signing`: the key's nonce and a recent block hash, so the
+  /** The **signer's own** public key, e.g.
+ *  `ed25519:6QxhpH1WENv3mS8Gr1Yx2iZQqZQdVZHi1s8VqEBnCLx`.
+   *
+   *  The router reads this key's current nonce and a recent block hash
+   *  and returns them as `signing` on every quote, so the route's
    *  transactions can be signed without asking an RPC first. The first
    *  transaction takes `nonce + 1`, and each one after it the nonce
-   *  after the one before. A quote can predate the trader's last
-   *  transaction, so sign from the higher of that nonce and the last
-   *  nonce you used.
+   *  after the one before — see `ROUTE_SIGNING_NONCES`.
    *
-   *  Only meaningful together with `trader_account_id`. */
+   *  Pass the public key of the account in `trader_account_id`, not
+   *  that account's *private* key, and not some other key's. A
+   *  mismatched key is not rejected: the router answers `200` and
+   *  simply omits `signing`, so the optimization silently does nothing.
+   *
+   *  A malformed key is a `400`. Nothing else on the wire relates to
+   *  this parameter — there are no Intents instructions in the router's
+   *  format, so no `add_public_key` transaction is needed. */
   signing_public_key?: string;
   /** Per-trade referrer override. `undefined` falls back to the
    *  client's configured referrer. */
@@ -169,7 +177,9 @@ export function WITH_TRADER_ACCOUNT_ID(
 ): QUOTE_PARAMS {
   return { ...params, trader_account_id };
 }
-/** Set the signing public key (needed for Intents legs). */
+/** Set the signer's own public key, so the route can be signed without
+ *  an RPC round trip for the nonce. See `QUOTE_PARAMS.signing_public_key`
+ *  — a mismatched key is accepted but silently yields no `signing`. */
 export function WITH_SIGNING_PUBLIC_KEY(
   params: QUOTE_PARAMS,
   signing_public_key: string,

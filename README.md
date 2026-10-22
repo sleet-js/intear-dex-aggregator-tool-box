@@ -143,6 +143,19 @@ const outcomes = await EXECUTE_ROUTE_SEQUENTIAL(near, best, { verbose: true });
 
 `NEAR_PRIVATE_KEY` must be the 64-byte secret key — `ed25519:` followed by ~88 base58 characters. The account's *public* key is accepted by near-kit's validator and then fails with an opaque `HTTP 400`; `.env.example` says so too.
 
+#### Signing without an RPC round trip
+
+Pass `signing_public_key` — **the public key of the account in `trader_account_id`** — and every quote comes back with a `signing` block:
+
+```ts
+import { ROUTE_SIGNING_NONCES } from "@sleet-js/intear-dex-aggregator-tool-box";
+
+const nonces = ROUTE_SIGNING_NONCES(route, lastNonceYouUsed);
+// -> ["...010", "...011"]  first transaction is nonce + 1
+```
+
+A quote can predate your last transaction, so pass the nonce you just used and the higher of the two wins. If the key belongs to a different account the router still answers `200` and simply omits `signing`, so **check the quote has one** — otherwise the optimization silently does nothing. There are no Intents instructions in the router's format and no `add_public_key` transaction is needed.
+
 ### 4. Live quotes over the WebSocket
 
 A quote is only good for a few seconds — pools change every block. `SUBSCRIBE_ROUTES` opens `wss://router.intear.tech/route/subscribe` and pushes a fresh best-first array every time a pool change moves the result, so a swap form re-renders without polling.
