@@ -1,0 +1,8 @@
+{
+  // Build config: emits `dist/` for publish. `rootDir: src` keeps the
+  // bins out of the output, since `files` publishes only `dist`.
+  // Typechecking the bins too lives in tsconfig.check.json.
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "html", "bin", "scripts"]
+}

@@ -71,8 +71,12 @@ function describe_best(routes: ROUTE[]): string {
 function format_routes(routes: ROUTE[]): string {
   if (routes.length === 0) return "    (no route)";
   const rows = routes.map((route, i) => {
-    const estimated = route.estimated_amount.amount_out ?? route.estimated_amount.amount_in;
-    const worst = route.worst_case_amount.amount_out ?? route.worst_case_amount.amount_in;
+    // Both fields are optional on the wire: the router fills exactly
+    // one depending on the quote mode, so neither can be assumed.
+    const estimated = route.estimated_amount.amount_out ??
+      route.estimated_amount.amount_in ?? "?";
+    const worst = route.worst_case_amount.amount_out ??
+      route.worst_case_amount.amount_in ?? "?";
     const mode = route.estimated_amount.amount_out !== undefined ? "out" : "in";
     const legs = route.execution_instructions.length;
     return (

@@ -21,13 +21,17 @@
   "publishConfig": {
     "access": "public"
   },
-  "workspaces": ["html"],
+  "workspaces": [
+    "html"
+  ],
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
     "swap": "bun run bin/dex_aggregator_swap_bin.ts",
     "subscribe": "bun run bin/dex_aggregator_subscribe_bin.ts",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "bun run build",
+    "typecheck:html": "cd html && tsc --noEmit -p tsconfig.json",
+    "typecheck:all": "bun run typecheck && bun run typecheck:html"
   },
   "dependencies": {
     "@near-kit-tool-box/env": "^0.2.1",

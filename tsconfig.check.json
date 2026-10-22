@@ -1,0 +1,21 @@
+{
+  // Typechecking only. `tsconfig.build.json` is what emits `dist/`,
+  // and it keeps `rootDir: src` so the bins are never published.
+  //
+  // The bins ship in the repo (`files` only publishes `dist`, and the
+  // bins are run with `bun run` from source), so they are typechecked
+  // here rather than compiled. `html/` keeps its own tsconfig: it is a
+  // browser target with DOM libs and its own @near-kit-tool-box/web
+  // dependency, and is typechecked by `bun run typecheck:html`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    // The bins import the library by its source path
+    // (`../src/index.ts`), the way `bun run` resolves it. Allowed here
+    // because this config does not emit.
+    "allowImportingTsExtensions": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*", "bin/**/*"],
+  "exclude": ["node_modules", "dist", "html", "scripts"]
+}

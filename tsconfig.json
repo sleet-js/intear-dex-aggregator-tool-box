@@ -1,4 +1,7 @@
 {
+  // Base config: compiler options only, no file selection and no emit
+  // config of its own. `tsconfig.check.json` typechecks src + bin,
+  // `tsconfig.build.json` emits dist from src.
   "compilerOptions": {
     "lib": ["ESNext"],
     "target": "ESNext",
@@ -21,7 +24,5 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "noPropertyAccessFromIndexSignature": false
-  },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "html", "bin", "scripts"]
+  }
 }
