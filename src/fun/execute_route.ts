@@ -28,14 +28,17 @@ import type {
 } from "near-kit";
 import {
   type FUNCTION_CALL_ACTION,
+  type EXECUTION_INSTRUCTION,
   type NEAR_TRANSACTION_INSTRUCTION,
   type ROUTE,
   SHOULD_CONTINUE_ON_FAILURE,
 } from "../lib/route_response_type";
 import {
+  DEX_AGGREGATOR_CLIENT,
   DEX_AGGREGATOR_CLIENT_ERROR,
 } from "../lib/client";
 import type { DEX_AGGREGATOR_ERROR } from "../lib/error_type";
+import type { SWAP_OUTCOME } from "../lib/outcome_response_type";
 import {
   DECODE_INSTRUCTION_ARGS_AS_JSON,
   DEPOSIT_FROM_ROUTE,
@@ -388,6 +391,290 @@ function resolve_default_signer_id(near: Near): string | undefined {
     .defaultSignerId;
   if (typeof candidate === "string" && candidate.length > 0) return candidate;
   return undefined;
+}
+// =================================================
+/** Options for `EXECUTE_ROUTE_FULL`. */
+export interface EXECUTE_ROUTE_FULL_OPTIONS extends EXECUTE_ROUTE_OPTIONS {
+  /** The client used for the `GET /route/outcome` checks. Required:
+   *  the phases below hinge on what actually happened on chain. */
+  client: DEX_AGGREGATOR_CLIENT;
+  /** `token_in` of the route request, for the outcome check. */
+  token_in: string;
+  /** `token_out` of the route request, for the outcome check. */
+  token_out: string;
+  /** What to do when the swap did not go through.
+   *
+   *  - `"throw"` (default): throw a `swap_failed` error carrying the
+   *    router's message and the recovery instructions.
+   *  - `"recover"`: run `next_steps` so the trader gets their tokens
+   *    back, then return the outcome with `swap_failed: true`.
+   *  - `"ignore"`: return the outcome and let the caller decide.
+   *
+   *  The route's fee transactions are only ever sent after a
+   *  successful check, whatever this is set to. */
+  on_failure?: "throw" | "recover" | "ignore";
+  /** Ask the outcome endpoint to answer as soon as the swap executed
+   *  (`wait_until=swap`) instead of waiting for the balances to
+   *  settle. Faster, but `next_steps` is empty until the final
+   *  check, so recovery of a failed swap needs a second call.
+   *  Default `false`. */
+  fast_outcome?: boolean;
+  /** The route's `fee_amount`, passed to the outcome checks so the
+   *  `next_steps` it returns leave the referral fee in the wallet for
+   *  the fee transactions. Defaults to `"0"`, which is right for a
+   *  quote requested without `fees`. */
+  fee_amount?: string;
+}
+// =================================================
+/** What `EXECUTE_ROUTE_FULL` did, phase by phase. */
+export interface ROUTE_FULL_RESULT {
+  /** Outcomes of the route's swap transactions (the ones before any
+   *  fee legs). Empty when the route had none. */
+  swap_outcomes: FinalExecutionOutcome[];
+  /** The check after the swap transactions: `charge_fee` decides
+   *  whether fees are owed. */
+  outcome: SWAP_OUTCOME;
+  /** Outcomes of the route's fee transactions. Empty when the route
+   *  had none, or when they were not sent because the swap failed. */
+  fee_outcomes: FinalExecutionOutcome[];
+  /** The second check, after the fee transactions. This is the one
+   *  that knows about stranded tokens and carries `next_steps`. */
+  final_outcome: SWAP_OUTCOME;
+  /** Outcomes of the recovery `next_steps`. Empty unless
+   *  `on_failure: "recover"` and the swap failed. */
+  recovery_outcomes: FinalExecutionOutcome[];
+  /** True when the swap went through. Mirrors `outcome.charge_fee`. */
+  swap_succeeded: boolean;
+}
+// =================================================
+/** Split a route into its swap instructions and its fee instructions.
+ *
+ *  The router marks referral-fee legs with `is_fee_transaction`
+ *  (older responses used `continue_if_failed`). They always come last
+ *  and are never merged with the swap's own transactions, so they can
+ *  be held back until the swap is known to have gone through. */
+export function SPLIT_ROUTE_FEE_LEGS(route: ROUTE): {
+  swap: EXECUTION_INSTRUCTION[];
+  fee: EXECUTION_INSTRUCTION[];
+} {
+  const swap: EXECUTION_INSTRUCTION[] = [];
+  const fee: EXECUTION_INSTRUCTION[] = [];
+  for (const instruction of route.execution_instructions) {
+    const tx = "NearTransaction" in instruction ? instruction.NearTransaction : undefined;
+    if (tx && SHOULD_CONTINUE_ON_FAILURE(tx)) {
+      fee.push(instruction);
+    } else {
+      swap.push(instruction);
+    }
+  }
+  return { swap, fee };
+}
+// =================================================
+/** Send an arbitrary list of instructions sequentially, with the same
+ *  per-leg failure handling as `EXECUTE_ROUTE_SEQUENTIAL`. Used for
+ *  the swap phase, the fee phase and the recovery `next_steps`, which
+ *  all share the instruction shape. */
+async function send_instructions(
+  near: Near,
+  signer_id: string,
+  instructions: EXECUTION_INSTRUCTION[],
+  verbose: boolean,
+): Promise<FinalExecutionOutcome[]> {
+  const pseudo_route: ROUTE = {
+    dex_id: "instructions",
+    estimated_amount: {},
+    worst_case_amount: {},
+    token_output: "",
+    execution_instructions: instructions,
+  };
+  const entries = prepare_entries(pseudo_route, verbose);
+  if (entries.length === 0) return [];
+  return send_one_at_a_time(near, entries, signer_id, verbose);
+}
+// =================================================
+/** Ask the outcome endpoint about a set of hashes, mapping a
+ *  non-2xx answer to `outcome_unavailable` rather than a plain `http`
+ *  error, so callers can tell "could not check" from "swap failed". */
+async function check_outcome(
+  client: DEX_AGGREGATOR_CLIENT,
+  options: EXECUTE_ROUTE_FULL_OPTIONS,
+  hashes: string[],
+  wait_until: "executed" | "swap",
+): Promise<SWAP_OUTCOME> {
+  try {
+    return await client.GET_ROUTE_OUTCOME({
+      token_in: options.token_in,
+      token_out: options.token_out,
+      trader_account_id: options.signer_id ?? "",
+      tx_hashes: hashes,
+      fee_amount: options.fee_amount ?? "0",
+      wait_until,
+    });
+  } catch (cause) {
+    if (cause instanceof DEX_AGGREGATOR_CLIENT_ERROR && cause.error.kind === "http") {
+      throw new DEX_AGGREGATOR_CLIENT_ERROR({
+        kind: "outcome_unavailable",
+        message: cause.error.message,
+        tx_hashes: hashes,
+      });
+    }
+    throw cause;
+  }
+}
+// =================================================
+/** Execute one route the way the aggregator documents it, in three
+ *  phases:
+ *
+ *    1. send the route's swap transactions,
+ *    2. ask `GET /route/outcome` what happened, and only send the
+ *       route's fee transactions when it says `charge_fee: true`,
+ *    3. check again for anything stranded, and run the recovery
+ *       `next_steps` it returns.
+ *
+ *  Phase 2 is the part that matters. The transaction carrying an
+ *  `ft_transfer_call` swap still *succeeds* when the DEX refunds it,
+ *  so the transaction status looks like a successful swap even though
+ *  the trader received nothing. Sending the fee transactions
+ *  unconditionally — which is what a flat send-everything loop does —
+ *  pays referral fees on swaps that never happened. Only the
+ *  endpoint's balance comparison sees the refund.
+ *
+ *  @example
+ *  ```ts
+ *  const result = await EXECUTE_ROUTE_FULL(near, route, {
+ *  client,
+ *  token_in: "near",
+ *  token_out: "usdt.tether-token.near",
+ *  on_failure: "recover",
+ *  verbose: true,
+ *  });
+ *  if (!result.swap_succeeded) {
+ *  // the trader is back where they started; show result.outcome.error
+ *  }
+ *  ```
+ *
+ *  @throws `DEX_AGGREGATOR_CLIENT_ERROR` with `kind: "swap_failed"`
+ *    when the swap did not go through and `on_failure` is `"throw"`.
+ *  @throws `DEX_AGGREGATOR_CLIENT_ERROR` with
+ *    `kind: "outcome_unavailable"` when the check itself could not
+ *    complete. The swap may still have succeeded — do not report it
+ *    as failed.
+ */
+export async function EXECUTE_ROUTE_FULL(
+  near: Near,
+  route: ROUTE,
+  options: EXECUTE_ROUTE_FULL_OPTIONS,
+): Promise<ROUTE_FULL_RESULT> {
+  const verbose = options.verbose === true;
+  const signer_id = options.signer_id ?? resolve_default_signer_id(near);
+  if (!signer_id) {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
+      kind: "invalid_params",
+      message:
+        "EXECUTE_ROUTE_FULL: no signer_id available — pass one explicitly or build Near with defaultSignerId",
+    });
+  }
+  if (!options.token_in || !options.token_out) {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
+      kind: "invalid_params",
+      message: "EXECUTE_ROUTE_FULL: token_in and token_out are required for the outcome check",
+    });
+  }
+  const on_failure = options.on_failure ?? "throw";
+  const { swap, fee } = SPLIT_ROUTE_FEE_LEGS(route);
+  // -------------------------------------------------
+  // phase 1: the swap's own transactions
+  const swap_outcomes = await send_instructions(
+    near,
+    signer_id,
+    swap,
+    verbose,
+  );
+  const swap_hashes = swap_outcomes
+    .map((o) => (o.transaction as { hash?: string } | undefined)?.hash)
+    .filter((h): h is string => typeof h === "string" && h.length > 0);
+  // The outcome endpoint needs 1 to 20 hashes to compare balances
+  // around, so a route with nothing to check cannot be verified. The
+  // router always emits at least one swap transaction, so this means
+  // a route built by hand rather than quoted.
+  if (swap_hashes.length === 0) {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
+      kind: "invalid_params",
+      message:
+        "EXECUTE_ROUTE_FULL: the route produced no swap transactions to check — it has no swap legs, or none of them returned a transaction hash",
+    });
+  }
+  // -------------------------------------------------
+  // phase 2: check, then fee transactions only if the swap went through
+  const outcome = await check_outcome(
+    options.client,
+    { ...options, signer_id },
+    swap_hashes,
+    options.fast_outcome ? "swap" : "executed",
+  );
+  const swap_succeeded = outcome.charge_fee;
+  if (verbose) {
+    console.log(
+      `[dex-aggregator] outcome: charge_fee=${outcome.charge_fee} settled=${outcome.settled} ` +
+        `in=${outcome.amount_in} out=${outcome.amount_out}` +
+        (outcome.error ? ` error="${outcome.error}"` : ""),
+    );
+  }
+  let fee_outcomes: FinalExecutionOutcome[] = [];
+  if (swap_succeeded && fee.length > 0) {
+    if (verbose) {
+      console.log(
+        `[dex-aggregator] swap went through — sending ${fee.length} fee transaction(s)`,
+      );
+    }
+    fee_outcomes = await send_instructions(near, signer_id, fee, verbose);
+  } else if (fee.length > 0 && verbose) {
+    console.log(
+      `[dex-aggregator] swap did not go through — not sending ${fee.length} fee transaction(s)`,
+    );
+  }
+  // -------------------------------------------------
+  // phase 3: final check for anything stranded, and recovery
+  const settled = await check_outcome(
+    options.client,
+    { ...options, signer_id },
+    swap_hashes,
+    "executed",
+  );
+  let recovery_outcomes: FinalExecutionOutcome[] = [];
+  if (!settled.charge_fee && settled.next_steps.length > 0) {
+    if (on_failure === "recover") {
+      if (verbose) {
+        console.log(
+          `[dex-aggregator] recovering ${settled.next_steps.length} stranded transaction(s)`,
+        );
+      }
+      recovery_outcomes = await send_instructions(
+        near,
+        signer_id,
+        settled.next_steps,
+        verbose,
+      );
+    }
+  }
+  if (!settled.charge_fee && on_failure === "throw") {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
+      kind: "swap_failed",
+      message: settled.error ?? "the swap did not go through",
+      amount_in: settled.amount_in,
+      amount_out: settled.amount_out,
+      next_steps: settled.next_steps,
+      tx_hashes: swap_hashes,
+    });
+  }
+  return {
+    swap_outcomes,
+    outcome,
+    fee_outcomes,
+    final_outcome: settled,
+    recovery_outcomes,
+    swap_succeeded: settled.charge_fee,
+  };
 }
 // =================================================
 // copyright 2026 by sleet.near

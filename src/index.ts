@@ -52,12 +52,14 @@ export type {
   QUOTE_AMOUNT,
   SLIPPAGE,
   TOKEN_ID,
+  FEE_CHARGE,
 } from "./lib/quote_params_type";
 export {
   AMOUNT_IN,
   AMOUNT_OUT,
   WITH_AUTO_SLIPPAGE,
   WITH_DEXES,
+  WITH_FEES,
   WITH_FIXED_SLIPPAGE,
   WITH_MAX_WAIT_MS,
   WITH_REFERRER_ID,
@@ -65,6 +67,11 @@ export {
   WITH_TRADER_ACCOUNT_ID,
   DESCRIBE_AMOUNT,
   DEFAULT_SLIPPAGE,
+  fees_to_query,
+  FEES_MAX_ACCOUNTS,
+  FEES_MAX_EACH,
+  FEES_MAX_TOTAL,
+  FEES_STEP,
 } from "./lib/quote_params_type";
 export type {
   ROUTE,
@@ -99,9 +106,13 @@ export {
 export {
   EXECUTE_ROUTE_SEQUENTIAL,
   EXECUTE_ROUTE_BATCHED,
+  EXECUTE_ROUTE_FULL,
+  SPLIT_ROUTE_FEE_LEGS,
   type BATCH_WALLET,
   type ACTION_LIKE,
   type EXECUTE_ROUTE_OPTIONS,
+  type EXECUTE_ROUTE_FULL_OPTIONS,
+  type ROUTE_FULL_RESULT,
 } from "./fun/execute_route";
 export {
   GET_ROUTES,

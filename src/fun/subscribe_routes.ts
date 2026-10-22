@@ -37,7 +37,7 @@
 import { DEX_AGGREGATOR_CLIENT_ERROR } from "../lib/client";
 import type { DEX_AGGREGATOR_CLIENT } from "../lib/client";
 import { COERCE_ROUTE, type ROUTE } from "../lib/route_response_type";
-import type { QUOTE_PARAMS } from "../lib/quote_params_type";
+import { fees_to_query, type QUOTE_PARAMS } from "../lib/quote_params_type";
 // =================================================
 /** Minimal socket contract, so this module stays runtime-agnostic and
  *  injectable. The global `WebSocket` (Node 22+, Bun, Deno, every
@@ -138,6 +138,8 @@ export function build_subscribe_query(params: QUOTE_PARAMS): string {
   if (params.trader_account_id && params.trader_account_id.trim().length > 0) {
     q.set("trader_account_id", params.trader_account_id);
   }
+  const fees = fees_to_query(params.fees);
+  if (fees !== undefined) q.set("fees", fees);
   if (params.signing_public_key && params.signing_public_key.trim().length > 0) {
     q.set("signing_public_key", params.signing_public_key);
   }

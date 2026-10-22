@@ -20,6 +20,7 @@ import {
 } from "./error_type";
 import {
   DESCRIBE_AMOUNT,
+  fees_to_query,
   type QUOTE_PARAMS,
 } from "./quote_params_type";
 import {
@@ -197,6 +198,10 @@ export class DEX_AGGREGATOR_CLIENT {
     if (params.trader_account_id && params.trader_account_id.trim().length > 0) {
       q.set("trader_account_id", params.trader_account_id);
     }
+    // Validated against the router's limits here, so a breach is a
+    // typed invalid_params error rather than an opaque 400.
+    const fees = fees_to_query(params.fees);
+    if (fees !== undefined) q.set("fees", fees);
     if (params.signing_public_key && params.signing_public_key.trim().length > 0) {
       q.set("signing_public_key", params.signing_public_key);
     }
