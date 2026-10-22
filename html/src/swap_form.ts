@@ -2,12 +2,13 @@ import {
   DEX_AGGREGATOR_CLIENT,
   DEX_AGGREGATOR_CLIENT_ERROR,
   AMOUNT_IN,
-  EXECUTE_ROUTE_BATCHED,
+  EXECUTE_ROUTE_FULL_BATCHED,
   FORMAT_DEX_AGGREGATOR_ERROR,
-  GET_ROUTES,
+  SUBSCRIBE_ROUTES,
   WITH_REFERRER_ID,
   WITH_TRADER_ACCOUNT_ID,
   type ROUTE,
+  type ROUTE_SUBSCRIPTION,
 } from "../../src/index.ts";
 import { near_connect_client } from "@near-kit-tool-box/web";
 // ==========================================
@@ -83,6 +84,72 @@ async function readParams() {
   return params;
 }
 // =================================================
+// Live quotes.
+//
+// A quote is only good for a few seconds — pools change every block —
+// so the form holds a `SUBSCRIBE_ROUTES` subscription open instead of
+// polling. Every push re-renders the route list, and the user always
+// executes a quote that is seconds old rather than one from whenever
+// they last clicked "get routes".
+//
+// One subscription at a time: changing the form closes the previous
+// socket, so there is never more than one asking for quotes.
+// =================================================
+let subscription: ROUTE_SUBSCRIPTION | null = null;
+let live_params_key = "";
+
+async function stopLive(): Promise<void> {
+  const current = subscription;
+  subscription = null;
+  live_params_key = "";
+  if (current) {
+    current.close();
+    try {
+      await current.closed;
+    } catch {
+      // already closed
+    }
+  }
+}
+
+/** A stable key for "these params are already subscribed". */
+async function paramsKey(): Promise<string> {
+  const tokenIn = $("TOKEN_IN");
+  const amountIn = $("AMOUNT_IN");
+  const tokenOut = $("TOKEN_OUT");
+  const referrer = $("REFERRER_ID");
+  const acct = await getConnectedAccountId();
+  return [tokenIn, amountIn, tokenOut, referrer, acct].join("|");
+}
+
+async function startLive(): Promise<void> {
+  const out = document.getElementById("ROUTES_OUTPUT");
+  const key = await paramsKey();
+  // Already watching these exact params — leave the socket alone.
+  if (subscription && key === live_params_key) return;
+  await stopLive();
+  if (out) out.replaceChildren(el("p", { text: "subscribing to live quotes..." }));
+
+  const params = await readParams();
+  live_params_key = key;
+  subscription = await SUBSCRIBE_ROUTES(client, params, {
+    on_update: (update) => {
+      if (update.kind === "error") {
+        renderError(
+          new DEX_AGGREGATOR_CLIENT_ERROR({
+            kind: "http",
+            message: `router rejected the subscription: ${update.message}`,
+          }),
+        );
+        return;
+      }
+      renderRoutes(update.routes, true);
+    },
+    on_error: (error) => renderError(error),
+  });
+}
+
+// =================================================
 function renderRouteCard(route: ROUTE, index: number): HTMLElement {
   const card = el("div", { cls: "route-card" });
   card.appendChild(el("h3", { text: `#${index} — ${route.dex_id}` }));
@@ -127,13 +194,31 @@ function renderRouteCard(route: ROUTE, index: number): HTMLElement {
   return card;
 }
 // =================================================
-function renderRoutes(routes: ROUTE[]): void {
+function renderRoutes(routes: ROUTE[], live = false): void {
   const out = document.getElementById("ROUTES_OUTPUT");
   if (!out) return;
   out.replaceChildren();
+  if (routes.length === 0) {
+    out.appendChild(el("h2", { text: "No routes." }));
+    out.appendChild(el("div", {
+      cls: "error",
+      text:
+        "Router answered `[]` — no DEX serves this pair/amount. Check the token ids, " +
+        "try a smaller amount, or use mainnet tokens only.",
+    }));
+    return;
+  }
   out.appendChild(el("h2", {
-    text: `Found ${routes.length} route(s) (best first):`,
+    text: live
+      ? `${routes.length} live route(s), best first:`
+      : `Found ${routes.length} route(s) (best first):`,
   }));
+  if (live) {
+    out.appendChild(el("div", {
+      cls: "small",
+      text: "live — the list updates itself as pools move. executing uses the quote shown.",
+    }));
+  }
   routes.forEach((route, i) => {
     out.appendChild(renderRouteCard(route, i));
   });
@@ -173,41 +258,63 @@ async function executeOne(route: ROUTE, index: number): Promise<void> {
     btn.textContent = "SENDING...";
   }
   try {
-    // Browser path: hand the wallet the whole route in ONE popup.
+    // Browser path: one popup for the swap's transactions, then a
+    // second only if the outcome says the swap went through.
     //
-    // `near-kit`'s `Near` (returned by `near_kit_client()`) exposes
-    // only `signAndSendTransaction` (singular) — one popup per call.
-    // For a multi-leg swap that would mean N popups in a row, so we
-    // reach the connected wallet directly and use its
-    // `signAndSendTransactions` (plural) method, which all
-    // `@hot-labs/near-connect` wallets implement on `NearWalletBase`.
-    //
-    // `EXECUTE_ROUTE_BATCHED` accepts that wallet, performs the
-    // runtime feature check, and dispatches one popup containing all
-    // route transactions (storage_deposit, register_assets,
-    // near_withdraw, deposit_near, etc.).
+    // `EXECUTE_ROUTE_FULL_BATCHED` runs the documented three phases:
+    // send the swap legs, ask `GET /route/outcome`, and only then send
+    // the `is_fee_transaction` legs. That last part matters — the
+    // transaction carrying an `ft_transfer_call` swap succeeds even
+    // when the DEX refunds it, so checking the transaction status
+    // alone reports a failed swap as a successful one and pays
+    // referral fees for it.
     const wallet = await near_connect_client().wallet();
-    const outcomes = await EXECUTE_ROUTE_BATCHED(wallet, route, {
+    const result = await EXECUTE_ROUTE_FULL_BATCHED(wallet, route, {
+      client,
       signer_id,
+      token_in: $("TOKEN_IN"),
+      token_out: $("TOKEN_OUT"),
+      on_failure: "recover",
+      fee_amount: route.fee_amount ?? "0",
       verbose: true,
     });
-    const ok = outcomes.every((o) =>
-      o.status && typeof o.status === "object" &&
-      "SuccessValue" in o.status,
-    );
+
     const out = document.getElementById("ROUTES_OUTPUT");
-    if (out) {
+    if (!out) return;
+    if (result.swap_succeeded) {
       out.appendChild(el("div", {
-        cls: ok ? "ok" : "error",
-        text: `Route #${index} (${route.dex_id}) — ${outcomes.length} transaction(s) sent.`,
+        cls: "ok",
+        text:
+          `Route #${index} (${route.dex_id}) succeeded — received ` +
+          `${result.final_outcome.amount_out} of ${$("TOKEN_OUT")}.`,
       }));
-      outcomes.forEach((o, i) => {
-        const hash = (o.transaction?.hash as string | undefined) ?? "?";
-        out.appendChild(el("div", {
-          html: `<a href="https://nearblocks.io/txns/${hash}" target="_blank" rel="noopener noreferrer">[tx ${i}] ${hash}</a>`,
-        }));
-      });
+    } else {
+      out.appendChild(el("div", {
+        cls: "error",
+        text:
+          `Route #${index} (${route.dex_id}) did not go through: ` +
+          `${result.outcome.error ?? "the DEX refunded the input"}`,
+      }));
+      out.appendChild(el("div", {
+        cls: "small",
+        text:
+          `spent ${result.outcome.amount_in}, received ${result.outcome.amount_out}. ` +
+          (result.recovery_outcomes.length > 0
+            ? `${result.recovery_outcomes.length} recovery transaction(s) sent to return your tokens.`
+            : ""),
+      }));
     }
+    const all = [
+      ...result.swap_outcomes,
+      ...result.fee_outcomes,
+      ...result.recovery_outcomes,
+    ];
+    all.forEach((o, i) => {
+      const hash = (o.transaction?.hash as string | undefined) ?? "?";
+      out.appendChild(el("div", {
+        html: `<a href="https://nearblocks.io/txns/${hash}" target="_blank" rel="noopener noreferrer">[tx ${i}] ${hash}</a>`,
+      }));
+    });
   } catch (caught: unknown) {
     if (caught instanceof DEX_AGGREGATOR_CLIENT_ERROR) {
       alert(FORMAT_DEX_AGGREGATOR_ERROR(caught.error));
@@ -228,18 +335,7 @@ async function onGetRoutes(): Promise<void> {
   const out = document.getElementById("ROUTES_OUTPUT");
   if (out) out.replaceChildren(el("p", { text: "loading..." }));
   try {
-    const params = await readParams();
-    const routes = await GET_ROUTES(client, params);
-    if (routes.length === 0) {
-      if (out) {
-        out.replaceChildren(el("div", {
-          cls: "error",
-          text: "No routes found. Router answered `[]` — no DEX serves this pair/amount. Check the token ids, try a smaller amount, or use mainnet tokens only.",
-        }));
-      }
-      return;
-    }
-    renderRoutes(routes);
+    await startLive();
   } catch (err) {
     console.error(err);
     renderError(err);
@@ -251,6 +347,12 @@ function initSwapForm(): void {
   if (!btn) return;
   btn.removeEventListener("click", onGetRoutes);
   btn.addEventListener("click", onGetRoutes);
+
+  // Close the socket when the page goes away, so a background tab does
+  // not hold a subscription open.
+  window.addEventListener("beforeunload", () => {
+    void stopLive();
+  });
 }
 
 if (document.readyState === "loading") {

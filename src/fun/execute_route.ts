@@ -85,6 +85,20 @@ export interface EXECUTE_ROUTE_OPTIONS {
 /** Sequential execution: one NEAR transaction per route instruction,
  *  sent in order via `near-kit`. Use this when there is no wallet
  *  attached (private-key signer, scripts, tests). */
+/** Send every instruction of a route in order, stopping at the first
+ *  failure.
+ *
+ *  ⚠️ Low-level. This does **not** verify the swap happened and does
+ *  **not** gate fee legs — the transaction carrying an `ft_transfer_call`
+ *  succeeds even when the DEX refunds it, so a refunded swap comes back
+ *  looking successful, and a route's `is_fee_transaction: true` legs
+ *  are sent regardless. Prefer `EXECUTE_ROUTE_FULL`, which checks
+ *  `GET /route/outcome` between the phases.
+ *
+ *  This is the right primitive only when the route provably has no fee
+ *  legs (`HAS_FEE_LEGS(route) === false`) and you verify the outcome
+ *  yourself, or when you want raw per-leg control.
+ */
 export async function EXECUTE_ROUTE_SEQUENTIAL(
   near: Near,
   route: ROUTE,
@@ -474,6 +488,185 @@ export function SPLIT_ROUTE_FEE_LEGS(route: ROUTE): {
  *  per-leg failure handling as `EXECUTE_ROUTE_SEQUENTIAL`. Used for
  *  the swap phase, the fee phase and the recovery `next_steps`, which
  *  all share the instruction shape. */
+// =================================================
+async function send_instructions_batched(
+  wallet: BATCH_WALLET,
+  signer_id: string,
+  instructions: EXECUTION_INSTRUCTION[],
+  verbose: boolean,
+): Promise<FinalExecutionOutcome[]> {
+  const pseudo_route: ROUTE = {
+    dex_id: "instructions",
+    estimated_amount: {},
+    worst_case_amount: {},
+    token_output: "",
+    execution_instructions: instructions,
+  };
+  const entries = prepare_entries(pseudo_route, verbose);
+  if (entries.length === 0) return [];
+  return send_batched(wallet, entries, signer_id, verbose);
+}
+// =================================================
+/** Options for `EXECUTE_ROUTE_FULL_BATCHED`. */
+export interface EXECUTE_ROUTE_FULL_BATCHED_OPTIONS {
+  /** The client used for the `GET /route/outcome` checks. Required:
+   *  the phases below hinge on what actually happened on chain. */
+  client: DEX_AGGREGATOR_CLIENT;
+  /** The account that signs. A wallet has no ambient default, so this
+   *  is not optional here the way it is for `EXECUTE_ROUTE_FULL`. */
+  signer_id: string;
+  /** `token_in` of the route request, for the outcome check. */
+  token_in: string;
+  /** `token_out` of the route request, for the outcome check. */
+  token_out: string;
+  /** What to do when the swap did not go through — see
+   *  `EXECUTE_ROUTE_FULL`. `"recover"` runs the recovery
+   *  `next_steps` in a further wallet popup. Default `"throw"`. */
+  on_failure?: "throw" | "recover" | "ignore";
+  /** The route's `fee_amount`, passed to the outcome checks so the
+   *  `next_steps` it returns leave the referral fee in the wallet.
+   *  Defaults to `"0"`. */
+  fee_amount?: string;
+  /** Ask the first outcome check to answer at the swap
+   *  (`wait_until=swap`) instead of waiting for the balances to
+   *  settle. Default `false`. */
+  fast_outcome?: boolean;
+  /** Opt-in trace. Default `false`. */
+  verbose?: boolean;
+}
+// =================================================
+/** The browser counterpart of `EXECUTE_ROUTE_FULL`: the same three
+ *  phases, batched into wallet popups.
+ *
+ *  Phase 1 sends the route's swap transactions in one popup via
+ *  `wallet.signAndSendTransactions` (plural). Phase 2 asks
+ *  `GET /route/outcome` and only opens a second popup for the fee
+ *  transactions when it reports `charge_fee: true`. Phase 3 checks
+ *  again and, on failure with `on_failure: "recover"`, runs the
+ *  recovery `next_steps` in a third popup.
+ *
+ *  Without this, a browser integration sends fee legs unconditionally
+ *  and reports a refunded swap as a success — the transaction carrying
+ *  an `ft_transfer_call` succeeds even when the DEX refunds it.
+ *
+ *  @example
+ *  ```ts
+ *  const wallet = await near_connect_client().wallet();
+ *  const result = await EXECUTE_ROUTE_FULL_BATCHED(wallet, route, {
+ *    client,
+ *    signer_id,
+ *    token_in: "near",
+ *    token_out: "usdt.tether-token.near",
+ *    on_failure: "recover",
+ *  });
+ *  if (result.swap_succeeded) show(result.final_outcome.amount_out);
+ *  ```
+ */
+export async function EXECUTE_ROUTE_FULL_BATCHED(
+  wallet: BATCH_WALLET | unknown,
+  route: ROUTE,
+  options: EXECUTE_ROUTE_FULL_BATCHED_OPTIONS,
+): Promise<ROUTE_FULL_RESULT> {
+  const verbose = options.verbose === true;
+  const signer_id = options.signer_id?.trim();
+  if (!signer_id) {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
+      kind: "invalid_params",
+      message: "EXECUTE_ROUTE_FULL_BATCHED: signer_id is required",
+    });
+  }
+  if (!options.token_in || !options.token_out) {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
+      kind: "invalid_params",
+      message:
+        "EXECUTE_ROUTE_FULL_BATCHED: token_in and token_out are required for the outcome check",
+    });
+  }
+  assert_supports_batching(wallet);
+  const on_failure = options.on_failure ?? "throw";
+  const { swap, fee } = SPLIT_ROUTE_FEE_LEGS(route);
+  // -------------------------------------------------
+  const swap_outcomes = await send_instructions_batched(
+    wallet as BATCH_WALLET,
+    signer_id,
+    swap,
+    verbose,
+  );
+  const swap_hashes = swap_outcomes
+    .map((o) => (o.transaction as { hash?: string } | undefined)?.hash)
+    .filter((h): h is string => typeof h === "string" && h.length > 0);
+  if (swap_hashes.length === 0) {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
+      kind: "invalid_params",
+      message:
+        "EXECUTE_ROUTE_FULL_BATCHED: the route produced no swap transactions to check",
+    });
+  }
+  // -------------------------------------------------
+  const outcome = await check_outcome(
+    options.client,
+    { ...options, signer_id, verbose },
+    swap_hashes,
+    options.fast_outcome ? "swap" : "executed",
+  );
+  const swap_succeeded = outcome.charge_fee;
+  if (verbose) {
+    console.log(
+      `[dex-aggregator] outcome: charge_fee=${outcome.charge_fee} settled=${outcome.settled} ` +
+        `in=${outcome.amount_in} out=${outcome.amount_out}` +
+        (outcome.error ? ` error="${outcome.error}"` : ""),
+    );
+  }
+  let fee_outcomes: FinalExecutionOutcome[] = [];
+  if (swap_succeeded && fee.length > 0) {
+    fee_outcomes = await send_instructions_batched(
+      wallet as BATCH_WALLET,
+      signer_id,
+      fee,
+      verbose,
+    );
+  } else if (fee.length > 0 && verbose) {
+    console.log(
+      `[dex-aggregator] swap did not go through — not sending ${fee.length} fee transaction(s)`,
+    );
+  }
+  // -------------------------------------------------
+  const settled = await check_outcome(
+    options.client,
+    { ...options, signer_id, verbose },
+    swap_hashes,
+    "executed",
+  );
+  let recovery_outcomes: FinalExecutionOutcome[] = [];
+  if (!settled.charge_fee && settled.next_steps.length > 0 &&
+    on_failure === "recover") {
+    recovery_outcomes = await send_instructions_batched(
+      wallet as BATCH_WALLET,
+      signer_id,
+      settled.next_steps,
+      verbose,
+    );
+  }
+  if (!settled.charge_fee && on_failure === "throw") {
+    throw new DEX_AGGREGATOR_CLIENT_ERROR({
+      kind: "swap_failed",
+      message: settled.error ?? "the swap did not go through",
+      amount_in: settled.amount_in,
+      amount_out: settled.amount_out,
+      next_steps: settled.next_steps,
+      tx_hashes: swap_hashes,
+    });
+  }
+  return {
+    swap_outcomes,
+    outcome,
+    fee_outcomes,
+    final_outcome: settled,
+    recovery_outcomes,
+    swap_succeeded: settled.charge_fee,
+  };
+}
+// =================================================
 async function send_instructions(
   near: Near,
   signer_id: string,
