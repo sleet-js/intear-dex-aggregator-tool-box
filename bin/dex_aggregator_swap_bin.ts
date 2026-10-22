@@ -40,12 +40,13 @@ import {
   AMOUNT_IN,
   DEX_AGGREGATOR_CLIENT,
   DEX_AGGREGATOR_CLIENT_ERROR,
-  EXECUTE_ROUTE_SEQUENTIAL,
+  EXECUTE_ROUTE_FULL,
   FORMAT_DEX_AGGREGATOR_ERROR,
   GET_ROUTES,
   PRINT_ROUTES_TABLE,
   PRINT_ROUTE_PREVIEW,
   WITH_DEXES,
+  WITH_FEES,
   WITH_FIXED_SLIPPAGE,
   WITH_MAX_WAIT_MS,
   WITH_REFERRER_ID,
@@ -115,6 +116,26 @@ async function main(): Promise<void> {
   if (trader !== undefined) params = WITH_TRADER_ACCOUNT_ID(params, trader);
   const pubKey = envOpt(["DEX_AGG_SIGNING_PUBLIC_KEY"]);
   if (pubKey !== undefined) params = WITH_SIGNING_PUBLIC_KEY(params, pubKey);
+  // Optional referral fee charged on the input of every swap. Both
+  // halves are required: the account to pay, and the fraction. Routes
+  // quoted with fees carry an `is_fee_transaction` leg, which
+  // EXECUTE_ROUTE_FULL only sends once the outcome says the swap went
+  // through.
+  const fee_account = envOpt(["DEX_AGG_FEE_ACCOUNT_ID"]);
+  const fee_value = envOpt(["DEX_AGG_FEE"]);
+  if (fee_account !== undefined && fee_value !== undefined) {
+    const fee = Number(fee_value);
+    if (!Number.isFinite(fee)) {
+      console.error(`DEX_AGG_FEE is not a decimal: ${fee_value}`);
+      process.exit(1);
+    }
+    params = WITH_FEES(params, [{ account_id: fee_account, fee }]);
+  } else if (fee_account !== undefined || fee_value !== undefined) {
+    console.error(
+      "Set BOTH DEX_AGG_FEE_ACCOUNT_ID (who to pay) and DEX_AGG_FEE (fraction, e.g. 0.005) to charge a referral fee.",
+    );
+    process.exit(1);
+  }
 
   const client = DEX_AGGREGATOR_CLIENT.FROM_ENV();
   console.log(
@@ -188,29 +209,74 @@ async function main(): Promise<void> {
   console.log();
   console.log(`Executing route ${index} via ${route.dex_id} ...`);
   try {
-    const outcomes = await EXECUTE_ROUTE_SEQUENTIAL(near_kit_env, route, {
+    // Three phases, so a refunded swap is not reported as a success
+    // and fee legs are only sent when the swap actually went through.
+    const result = await EXECUTE_ROUTE_FULL(near_kit_env, route, {
+      client,
+      token_in: tokenIn,
+      token_out: tokenOut,
       signer_id: NEAR_ACCOUNT_ID,
+      fee_amount: route.fee_amount ?? "0",
+      on_failure: "recover",
       verbose: true,
     });
-    for (let i = 0; i < outcomes.length; i++) {
-      const outcome = outcomes[i]!;
-      const status = outcome.status && typeof outcome.status === "object" &&
-          "SuccessValue" in outcome.status
-        ? "SUCCESS"
-        : "FAILED";
-      const hash = (outcome.transaction?.hash as string | undefined) ??
-        "(unknown)";
-      console.log(`  [tx ${i}] ${status} hash ${hash}`);
-      console.log(`          https://nearblocks.io/txns/${hash}`);
+    print_outcomes("swap", result.swap_outcomes);
+    if (result.fee_outcomes.length > 0) {
+      print_outcomes("fee", result.fee_outcomes);
+    }
+    if (result.recovery_outcomes.length > 0) {
+      print_outcomes("recovery", result.recovery_outcomes);
+    }
+    console.log();
+    if (result.swap_succeeded) {
+      console.log(
+        `OK — spent ${result.final_outcome.amount_in} ${tokenIn}, ` +
+        `received ${result.final_outcome.amount_out} ${tokenOut}`,
+      );
+    } else {
+      console.log(
+        `SWAP FAILED — ${result.outcome.error ?? "the DEX refunded the input"}`,
+      );
+      console.log(
+        `  spent ${result.outcome.amount_in}, received ${result.outcome.amount_out}` +
+        (result.recovery_outcomes.length > 0
+          ? `\n  ${result.recovery_outcomes.length} recovery transaction(s) sent to return your tokens`
+          : ""),
+      );
     }
   } catch (err) {
     if (err instanceof DEX_AGGREGATOR_CLIENT_ERROR) {
       console.error(FORMAT_DEX_AGGREGATOR_ERROR(err.error));
+      if (err.error.kind === "swap_failed") {
+        console.error(
+          "The swap did not go through and no recovery was run. Re-quote and try again," +
+          " or raise your slippage.",
+        );
+      }
+      if (err.error.kind === "outcome_unavailable") {
+        console.error(
+          "This is a failed CHECK, not a failed swap — the swap may well have succeeded." +
+          " Verify the hashes on nearblocks before retrying, or you will double-spend.",
+        );
+      }
     } else {
       console.error(err);
     }
     process.exit(1);
   }
+}
+
+/** Print each transaction with a label and its explorer link. */
+function print_outcomes(
+  label: string,
+  outcomes: readonly { transaction?: { hash?: string } }[],
+): void {
+  outcomes.forEach((outcome, i) => {
+    const hash = (outcome.transaction?.hash as string | undefined) ??
+      "(unknown)";
+    console.log(`  [${label} ${i}] hash ${hash}`);
+    console.log(`          https://nearblocks.io/txns/${hash}`);
+  });
 }
 // =================================================
 main().catch((err) => {
