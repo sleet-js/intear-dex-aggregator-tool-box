@@ -26,7 +26,7 @@
 //
 // Ctrl-C to stop early.
 // =================================================
-import { NEAR_ACCOUNT_ID } from "@near-kit-tool-box/env";
+import { NEAR_KIT_ACCOUNT_ID } from "@near-kit-tool-box/env";
 import {
   AMOUNT_IN,
   DEX_AGGREGATOR_CLIENT,
@@ -124,7 +124,7 @@ async function main(): Promise<void> {
   // catches null/undefined, so the raw read would yield "" and
   // silently send no trader at all.
   const trader = env_opt("DEX_AGG_TRADER_ACCOUNT_ID") ??
-    (NEAR_ACCOUNT_ID.length > 0 ? NEAR_ACCOUNT_ID : undefined);
+    (NEAR_KIT_ACCOUNT_ID.length > 0 ? NEAR_KIT_ACCOUNT_ID : undefined);
   if (trader !== undefined) params = WITH_TRADER_ACCOUNT_ID(params, trader);
   const pub_key = env_opt("DEX_AGG_SIGNING_PUBLIC_KEY");
   if (pub_key !== undefined) params = WITH_SIGNING_PUBLIC_KEY(params, pub_key);

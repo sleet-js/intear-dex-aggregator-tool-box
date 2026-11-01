@@ -141,7 +141,7 @@ const near = new Near({
 const outcomes = await EXECUTE_ROUTE_SEQUENTIAL(near, best, { verbose: true });
 ```
 
-`NEAR_PRIVATE_KEY` must be the 64-byte secret key — `ed25519:` followed by ~88 base58 characters. The account's *public* key is accepted by near-kit's validator and then fails with an opaque `HTTP 400`; `.env.example` says so too.
+`NEAR_KIT_PRIVATE_KEY` must be the 64-byte secret key — `ed25519:` followed by ~88 base58 characters. The account's *public* key is accepted by near-kit's validator and then fails with an opaque `HTTP 400`; `.env.example` says so too.
 
 #### Signing without an RPC round trip
 

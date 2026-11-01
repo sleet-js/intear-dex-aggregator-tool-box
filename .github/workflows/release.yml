@@ -1,0 +1,208 @@
+name: RELEASE
+
+# Manual release. Bumps the package to one version, commits, tags,
+# builds, and publishes to npm with trusted publishing (OIDC).
+#
+# The git tag and the npm version are always the same string:
+#   tag v0.1.2  <->  npm @sleet-js/intear-dex-aggregator-tool-box@0.1.2
+#
+# The package is pre-1.0, so the bump is `patch` only — `patch` is the
+# smallest bump (0.1.1 -> 0.1.2). There is no `minor` and no `major`
+# option. A breaking change ships as a `patch`; a `major` bump would
+# take the package to 1.0.0 and imply a stability promise it does not
+# make. No major bumps, whatever the change.
+#
+# The `version` input is the escape hatch for an exact version, so a
+# release that is not one patch past the last one can still be cut.
+# The bump BUTTON is patch-only — that is the rule. The exact input
+# takes any valid semver.
+#
+# Only the root package is published. `html/` is a private workspace
+# demo, so its version is not bumped and it is not published.
+#
+# First-time setup on npmjs.com (once):
+#   Package Settings -> Trusted Publisher -> GitHub Actions
+#     Organization or user : sleet-js
+#     Repository           : intear-dex-aggregator-tool-box
+#     Workflow filename    : release.yml
+#     Allowed actions      : npm publish
+#   The config must complete its first publish within 2 days or it expires.
+#
+# NOTE: this `name:` is only the label shown in the Actions UI. npm matches the
+# trusted publisher on the workflow FILENAME (release.yml) and the repository,
+# never on this field. Renaming it here does not affect publishing.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Version bump type"
+        type: choice
+        required: true
+        default: patch
+        options:
+          - patch
+      version:
+        description: "Exact version to release (leave blank to use the bump type)"
+        type: string
+        required: false
+        default: ""
+
+# Only the default branch may cut a release.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write # commit the version bump and push the tag
+  id-token: write # REQUIRED for npm OIDC trusted publishing
+
+env:
+  NODE_VERSION: "24"
+  NPM_VERSION: "12.2.1" # >= 11.5.1 for trusted publishing
+  PACKAGE_NAME: "@sleet-js/intear-dex-aggregator-tool-box"
+
+jobs:
+  release:
+    name: Bump, tag, and publish
+    runs-on: ubuntu-latest
+    # Restrict publishing to the main branch.
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history so the tags are there
+          persist-credentials: true # needed to push the commit and tag
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false # never cache in release builds
+
+      - name: Install npm
+        run: npm install -g npm@${{ env.NPM_VERSION }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        # The root package and the `html/` workspace are typechecked
+        # separately — `html/` is a browser target with its own tsconfig
+        # and its own @near-kit-tool-box/web dependency.
+        run: bun run typecheck:all
+
+      - name: Compute the release version
+        id: version
+        run: |
+          set -euo pipefail
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="$(bun run scripts/release-version.ts "${{ inputs.bump }}")"
+          fi
+          # npm requires a plain semver version. Reject anything else before
+          # we bump, commit, or tag.
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::'$VERSION' is not a valid version (expected MAJOR.MINOR.PATCH)"
+            exit 1
+          fi
+          # A tag and an npm version must be the same string.
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+          echo ""
+          echo "Releasing version $VERSION (tag v$VERSION)"
+
+      - name: Bump the package to the release version
+        run: bun run scripts/version-sync.ts "${{ steps.version.outputs.version }}"
+
+      - name: Verify the bump landed
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          got="$(node -p "require('./package.json').version")"
+          if [ "$got" != "$VERSION" ]; then
+            echo "::error::package.json is at $got, expected $VERSION"
+            exit 1
+          fi
+          echo "  OK  package.json  $got"
+
+      - name: Commit the version bump
+        run: |
+          set -euo pipefail
+          git config user.name  "sleet-ai"
+          git config user.email "sleet-ai@outlook.com"
+          git add package.json
+          if git diff --cached --quiet; then
+            echo "Nothing to commit — the version is already at the target."
+          else
+            git commit -m "chore: bump to v${{ steps.version.outputs.version }}"
+          fi
+          # Push the bump so the tag points at a commit that exists on the remote.
+          git push origin HEAD:${{ github.ref_name }}
+
+      - name: Create and push the git tag
+        run: |
+          set -euo pipefail
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+          if git rev-parse "$TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $TAG already exists — bump to a new version or delete the tag."
+            exit 1
+          fi
+          # Tag the release commit. The tag string must equal the npm version.
+          git tag -a "$TAG" -m "Release $VERSION"
+          git push origin "refs/tags/$TAG"
+          echo "Pushed tag $TAG"
+
+      - name: Build
+        run: bun run clean && bun run build
+
+      - name: Publish to npm
+        # The publish uses OIDC — there is no NPM_TOKEN secret in this repo.
+        run: npm publish --access public
+
+      - name: Verify the published version
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          # Query the per-version registry endpoint rather than `npm view`:
+          # npm view reads a cached packument, so a freshly published version
+          # can stay invisible for minutes. This endpoint 404s until the
+          # version is really live, and never serves a stale copy.
+          #
+          # the window is generous on purpose — the publish can take a few
+          # minutes to propagate through npm's cdn, and a release that
+          # actually worked should not be reported as a failure.
+          ok=false
+          for _ in $(seq 1 60); do
+            if curl -sf -o /dev/null \
+              "https://registry.npmjs.org/${PACKAGE_NAME/\//%2f}/$VERSION"; then
+              ok=true
+              break
+            fi
+            sleep 10
+          done
+          if [ "$ok" != "true" ]; then
+            echo "::error::$PACKAGE_NAME@$VERSION is not on the registry yet"
+            echo "::error::the publish may still be propagating — check https://www.npmjs.com/package/$PACKAGE_NAME?activeTab=versions"
+            exit 1
+          fi
+          echo "  OK  $PACKAGE_NAME@$VERSION"
+
+      - name: Create the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

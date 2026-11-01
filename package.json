@@ -25,24 +25,28 @@
     "html"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "rm -f .tsbuildinfo && tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist .tsbuildinfo",
     "typecheck": "tsc --noEmit -p tsconfig.check.json",
     "swap": "bun run bin/dex_aggregator_swap_bin.ts",
     "subscribe": "bun run bin/dex_aggregator_subscribe_bin.ts",
     "prepublishOnly": "bun run build",
     "typecheck:html": "cd html && tsc --noEmit -p tsconfig.json",
-    "typecheck:all": "bun run typecheck && bun run typecheck:html"
+    "typecheck:all": "bun run typecheck && bun run typecheck:html",
+    "version:sync": "bun run scripts/version-sync.ts",
+    "version:dry-run": "bun run scripts/version-sync.ts --dry-run",
+    "release:version": "bun run scripts/release-version.ts"
   },
   "dependencies": {
-    "@near-kit-tool-box/env": "^0.2.1",
+    "@near-kit-tool-box/env": "^0.3.0",
     "near-kit": "^0.20.2"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "typescript": "^5.6.0"
+    "typescript": "^7.0.2"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^7.0.2"
   },
   "files": [
     "dist"

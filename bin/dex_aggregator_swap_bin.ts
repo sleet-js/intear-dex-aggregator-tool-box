@@ -13,11 +13,11 @@
 //   DEX_AGG_TOKEN_IN / DEX_AGG_AMOUNT_IN / DEX_AGG_TOKEN_OUT
 //   DEX_AGG_SLIPPAGE DEX_AGG_MAX_WAIT_MS DEX_AGG_DEXES DEX_AGG_REFERRER_ID
 //   DEX_AGG_TRADER_ACCOUNT_ID DEX_AGG_SIGNING_PUBLIC_KEY
-//   NEAR_NETWORK (must be mainnet to --execute) NEAR_ACCOUNT_ID NEAR_PRIVATE_KEY
+//   NEAR_KIT_NETWORK (must be mainnet to --execute) NEAR_KIT_ACCOUNT_ID NEAR_KIT_PRIVATE_KEY
 //
 // The NEAR signer comes from `@near-kit-tool-box/env`, which loads
-// `.env` itself and exports `near_kit_env`, `NEAR_NETWORK` and
-// `NEAR_ACCOUNT_ID`. Quoting needs no credentials; only `--execute`
+// `.env` itself and exports `near_kit_env`, `NEAR_KIT_NETWORK` and
+// `NEAR_KIT_ACCOUNT_ID`. Quoting needs no credentials; only `--execute`
 // touches the signer.
 //
 // Examples (quoting needs no credentials — the router is mainnet only):
@@ -32,8 +32,8 @@
 //   bun run bin/dex_aggregator_swap_bin.ts near 100000000000000000000000 this-token-does-not-exist-xyz123.near
 // =================================================
 import {
-  NEAR_ACCOUNT_ID,
-  NEAR_NETWORK,
+  NEAR_KIT_ACCOUNT_ID,
+  NEAR_KIT_NETWORK,
   near_kit_env,
 } from "@near-kit-tool-box/env";
 import {
@@ -112,7 +112,7 @@ async function main(): Promise<void> {
   // Default the trader to the signer so storage-deposit legs are
   // included when you go on to execute.
   const trader = envOpt(["DEX_AGG_TRADER_ACCOUNT_ID"]) ??
-    (NEAR_ACCOUNT_ID.length > 0 ? NEAR_ACCOUNT_ID : undefined);
+    (NEAR_KIT_ACCOUNT_ID.length > 0 ? NEAR_KIT_ACCOUNT_ID : undefined);
   if (trader !== undefined) params = WITH_TRADER_ACCOUNT_ID(params, trader);
   const pubKey = envOpt(["DEX_AGG_SIGNING_PUBLIC_KEY"]);
   if (pubKey !== undefined) params = WITH_SIGNING_PUBLIC_KEY(params, pubKey);
@@ -188,22 +188,22 @@ async function main(): Promise<void> {
       "Dry run — no transaction sent. Re-run with --execute plus a funded mainnet",
     );
     console.log(
-      "signer (NEAR_NETWORK=mainnet NEAR_ACCOUNT_ID NEAR_PRIVATE_KEY in .env) to swap.",
+      "signer (NEAR_KIT_NETWORK=mainnet NEAR_KIT_ACCOUNT_ID NEAR_KIT_PRIVATE_KEY in .env) to swap.",
     );
     return;
   }
 
-  if (NEAR_NETWORK !== "mainnet") {
+  if (NEAR_KIT_NETWORK !== "mainnet") {
     console.error(
-      "Refusing to execute: the intear router is mainnet only but NEAR_NETWORK is not mainnet.",
+      "Refusing to execute: the intear router is mainnet only but NEAR_KIT_NETWORK is not mainnet.",
     );
     console.error(
-      "Set NEAR_NETWORK=mainnet (with a funded mainnet signer) to execute.",
+      "Set NEAR_KIT_NETWORK=mainnet (with a funded mainnet signer) to execute.",
     );
     process.exit(1);
   }
-  if (NEAR_ACCOUNT_ID.length === 0) {
-    console.error("Refusing to execute: NEAR_ACCOUNT_ID is not set.");
+  if (NEAR_KIT_ACCOUNT_ID.length === 0) {
+    console.error("Refusing to execute: NEAR_KIT_ACCOUNT_ID is not set.");
     process.exit(1);
   }
   console.log();
@@ -215,7 +215,7 @@ async function main(): Promise<void> {
       client,
       token_in: tokenIn,
       token_out: tokenOut,
-      signer_id: NEAR_ACCOUNT_ID,
+      signer_id: NEAR_KIT_ACCOUNT_ID,
       fee_amount: route.fee_amount ?? "0",
       on_failure: "recover",
       verbose: true,
