@@ -310,6 +310,17 @@ bun run build
 bun publish --dry-run
 bunx npm login
 bun publish --access public
+# other
+bun run typecheck --noEmit
+bunx prettier . --write
+```
+
+releases are cut from the `RELEASE` workflow (Actions -> RELEASE), which
+bumps the version, tags it, and publishes to npm.
+
+```bash
+bun run release:version patch   # print the next version
+bun run version:dry-run        # preview a version bump
 ```
 
 ---
