@@ -48,6 +48,13 @@ export type {
   DEX_AGGREGATOR_SWAP_FAILED_ERROR,
 } from "./lib/error_type";
 export { FORMAT_DEX_AGGREGATOR_ERROR } from "./lib/error_type";
+// diagnostic logging: a pluggable sink + a verbosity level
+export {
+  console_logger,
+  null_logger,
+  DEX_AGGREGATOR_LOG_LEVELS,
+} from "./lib/logger";
+export type { logger, diagnostic_logger, log_level } from "./lib/logger";
 export type {
   QUOTE_PARAMS,
   QUOTE_AMOUNT,

@@ -32,6 +32,11 @@ import {
   type OUTCOME_PARAMS,
   type SWAP_OUTCOME,
 } from "./outcome_response_type";
+import {
+  console_logger,
+  type logger,
+  type log_level,
+} from "./logger";
 // =================================================
 /** A typed error class so it can be `instanceof`-checked and `throw`n
  *  just like a normal error. Always carries a typed `error: DEX_AGGREGATOR_ERROR`
@@ -88,11 +93,17 @@ export class DEX_AGGREGATOR_CLIENT {
   private default_max_wait_ms: number;
   private api_key?: string;
   private readonly fetch_impl: typeof fetch;
+  private readonly logger: logger;
   // =================================================
   constructor(
     options: {
       base_url?: string;
       fetch?: typeof fetch;
+      /** Diagnostic verbosity. Defaults to `none` (silent). */
+      level?: log_level;
+      /** Diagnostic sink. Defaults to a console-backed sink filtered by
+       * `level`. */
+      logger?: logger;
     } = {},
   ) {
     this.base_url = (options.base_url ?? DEX_AGGREGATOR_BASE_URL).replace(
@@ -101,6 +112,7 @@ export class DEX_AGGREGATOR_CLIENT {
     );
     this.default_max_wait_ms = DEX_AGGREGATOR_DEFAULT_MAX_WAIT_MS;
     this.fetch_impl = options.fetch ?? globalThis.fetch;
+    this.logger = options.logger ?? new console_logger(options.level ?? "none");
     if (!this.fetch_impl) {
       throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "invalid_params",
@@ -178,6 +190,10 @@ export class DEX_AGGREGATOR_CLIENT {
   API_KEY_VALUE(): string | undefined {
     return this.api_key;
   }
+  /** Diagnostic sink used by this client. */
+  LOGGER_VALUE(): logger {
+    return this.logger;
+  }
   // =================================================
   /** Build the query pairs for one trade, layering per-trade values
    *  over client defaults. Pure helper exposed for callers that want
@@ -251,6 +267,13 @@ export class DEX_AGGREGATOR_CLIENT {
     }
     const qs = this.BUILD_QUERY_PAIRS(params);
     const url = `${this.base_url}/route?${qs.toString()}`;
+    const started_at = Date.now();
+    this.logger.info("route request", {
+      token_in: params.token_in,
+      token_out: params.token_out,
+      amount: DESCRIBE_AMOUNT(params.amount),
+      url,
+    });
     // Browser `fetch` enforces strict `this`-binding to the global
     // object. Detached calls fail with `Illegal invocation` on Chrome
     // (Android) and Safari; Node/Bun ignore it, so this slips past
@@ -262,6 +285,12 @@ export class DEX_AGGREGATOR_CLIENT {
     if (!res.ok) {
       const body = await safe_text(res);
       const snippet = body.slice(0, 300);
+      this.logger.warn("route response error", {
+        status: res.status,
+        status_text: res.statusText,
+        duration_ms: Date.now() - started_at,
+        body_preview: snippet,
+      });
       throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "http",
         message: `router answered ${res.status} ${res.statusText}: ${snippet}`,
@@ -271,12 +300,23 @@ export class DEX_AGGREGATOR_CLIENT {
     try {
       raw = await res.json();
     } catch (cause) {
+      this.logger.warn("route response error", {
+        status: res.status,
+        duration_ms: Date.now() - started_at,
+        error: `response was not JSON: ${(cause as Error)?.message ?? cause}`,
+      });
       throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "parse",
         message: `response was not JSON: ${(cause as Error)?.message ?? cause}`,
       });
     }
     if (!Array.isArray(raw)) {
+      this.logger.warn("route response error", {
+        status: res.status,
+        duration_ms: Date.now() - started_at,
+        error: "expected a JSON array of routes",
+        response_type: typeof raw,
+      });
       throw new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "parse",
         message: `expected a JSON array of routes, got ${typeof raw}`,
@@ -292,6 +332,13 @@ export class DEX_AGGREGATOR_CLIENT {
       }
       routes.push(COERCE_ROUTE(entry as Record<string, unknown>));
     }
+    this.logger.info("route response", {
+      status: res.status,
+      duration_ms: Date.now() - started_at,
+      route_count: routes.length,
+      dex_ids: routes.map((route) => route.dex_id),
+    });
+    this.logger.debug("route response body", { routes });
     return routes;
   }
   // =================================================

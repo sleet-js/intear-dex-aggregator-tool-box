@@ -38,6 +38,7 @@ import { DEX_AGGREGATOR_CLIENT_ERROR } from "../lib/client";
 import type { DEX_AGGREGATOR_CLIENT } from "../lib/client";
 import { COERCE_ROUTE, type ROUTE } from "../lib/route_response_type";
 import { fees_to_query, type QUOTE_PARAMS } from "../lib/quote_params_type";
+import { type logger } from "../lib/logger";
 // =================================================
 /** Minimal socket contract, so this module stays runtime-agnostic and
  *  injectable. The global `WebSocket` (Node 22+, Bun, Deno, every
@@ -164,6 +165,9 @@ export interface SUBSCRIBE_OPTIONS {
   on_error?: (error: Error) => void;
   /** Called once the socket has closed, whatever the reason. */
   on_close?: (info: { code?: number; reason?: string }) => void;
+  /** Diagnostic sink for this subscription. Defaults to the client's
+   *  logger. */
+  logger?: logger;
 }
 // =================================================
 /** A live subscription. Call `close()` when done.
@@ -234,6 +238,7 @@ export async function SUBSCRIBE_ROUTES(
     ? `${base}?key=${encodeURIComponent(client.API_KEY_VALUE()!)}`
     : base;
   const make = options.socket_factory ?? default_socket_factory;
+  const diagnostic_logger = options.logger ?? client.LOGGER_VALUE();
   const socket = make(url);
   let closed = false;
   let settle_closed: () => void = () => {};
@@ -243,6 +248,11 @@ export async function SUBSCRIBE_ROUTES(
   const finish = (code?: number, reason?: string) => {
     if (closed) return;
     closed = true;
+    diagnostic_logger.info("route subscription closed", {
+      id,
+      code: code ?? null,
+      reason: reason ?? null,
+    });
     options.on_close?.({ code, reason });
     settle_closed();
   };
@@ -252,6 +262,7 @@ export async function SUBSCRIBE_ROUTES(
     finish();
   };
   socket.onopen = () => {
+    diagnostic_logger.info("route subscription open", { id, url });
     socket.send(JSON.stringify({ id, query }));
   };
   socket.onmessage = (event) => {
@@ -286,6 +297,10 @@ export async function SUBSCRIBE_ROUTES(
     if (typeof got_id === "number" && got_id !== id) return;
     if (typeof record["error"] === "string") {
       // A bad query is reported in-band and the socket stays open.
+      diagnostic_logger.warn("route subscription error", {
+        id,
+        message: record["error"],
+      });
       options.on_update?.({ kind: "error", id, message: record["error"] });
       return;
     }
@@ -316,10 +331,20 @@ export async function SUBSCRIBE_ROUTES(
       );
       return;
     }
+    diagnostic_logger.info("route update", {
+      id,
+      route_count: routes.length,
+      dex_ids: routes.map((route) => route.dex_id),
+    });
+    diagnostic_logger.debug("route update body", { routes });
     options.on_update?.({ kind: "routes", id, routes });
   };
   socket.onerror = (event) => {
     const detail = (event as { message?: string })?.message;
+    diagnostic_logger.warn("route subscription socket error", {
+      id,
+      detail: detail ?? null,
+    });
     fail(
       new DEX_AGGREGATOR_CLIENT_ERROR({
         kind: "http",

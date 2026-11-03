@@ -28,6 +28,7 @@
     "build": "rm -f .tsbuildinfo && tsc -p tsconfig.build.json",
     "clean": "rm -rf dist .tsbuildinfo",
     "typecheck": "tsc --noEmit -p tsconfig.check.json",
+    "test": "bun test",
     "swap": "bun run bin/dex_aggregator_swap_bin.ts",
     "subscribe": "bun run bin/dex_aggregator_subscribe_bin.ts",
     "prepublishOnly": "bun run build",

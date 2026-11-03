@@ -186,6 +186,49 @@ Updates arrive only when the result changes, and the server throttles re-routing
 
 `WebSocket` is global in Node 22+, Bun, Deno and browsers. On Node 18 pass `{ socket_factory }`.
 
+### Diagnostic logging
+
+The client is **silent by default**. Turn diagnostics on with a level:
+
+```ts
+const client = new DEX_AGGREGATOR_CLIENT({ level: "info" });
+```
+
+| Level | What's logged |
+|---|---|
+| `none` (default) | nothing |
+| `info` | quote requests/responses and subscription lifecycle events, including one line per live route update |
+| `warn` | everything in `info` plus request and socket failures |
+| `debug` | adds complete route bodies |
+
+Every entry is one line in a stable `key=value` format. Example:
+
+```
+[dex_aggregator:info] route response status=200 duration_ms=42 route_count=2 dex_ids=["Rhea","Plach"]
+[dex_aggregator:info] route update id=1 route_count=2 dex_ids=["Rhea","Plach"]
+```
+
+To redirect logs to pino, winston, datadog, Sentry, or your own browser console, pass a `logger`:
+
+```ts
+import type { logger } from "@sleet-js/intear-dex-aggregator-tool-box";
+
+const logger: logger = {
+  info: (event, fields) => my_logger.info(event, fields),
+  warn: (event, fields) => my_logger.warn(event, fields),
+  debug: (event, fields) => my_logger.debug(event, fields),
+  error: (event, fields) => my_logger.error(event, fields),
+};
+
+const client = new DEX_AGGREGATOR_CLIENT({ level: "info", logger });
+```
+
+A subscription can override the client's sink for its own lifetime:
+
+```ts
+await SUBSCRIBE_ROUTES(client, params, { logger });
+```
+
 ### 5. Browser path (one popup per route)
 
 ```ts

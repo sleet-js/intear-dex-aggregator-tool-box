@@ -16,6 +16,6 @@
     "allowImportingTsExtensions": true,
     "rootDir": "."
   },
-  "include": ["src/**/*", "bin/**/*"],
+  "include": ["src/**/*", "bin/**/*", "tests/**/*"],
   "exclude": ["node_modules", "dist", "html", "scripts"]
 }
